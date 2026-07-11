@@ -1,0 +1,4 @@
+interface:
+  display_name: "ADB"
+  short_description: "Android adb command workflows"
+  default_prompt: "Use $adb to inspect an Android device and gather the relevant logs."

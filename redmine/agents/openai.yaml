@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redmine"
+  short_description: "Nationalchip Redmine issue and project workflows"
+  default_prompt: "Use $redmine to query or update Redmine issues."
