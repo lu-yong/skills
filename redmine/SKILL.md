@@ -22,6 +22,20 @@ Read `SECRET.md` only when a Redmine API call is needed. Do not print the key, i
 5. Summarize results clearly for the user. Include issue IDs, subjects, status, assignee, project, and timestamps when relevant.
 6. For destructive or broad changes, confirm intent before executing unless the user explicitly requested the exact operation.
 
+## AI Write Audit Trail
+
+Every Redmine write operation performed by the AI must leave a visible audit note using this exact prefix:
+
+`由 luyong-AI 操作：`
+
+- Append a concise Chinese summary of the actual operation after the prefix, including the important changed fields and values.
+- For issue creation, include the audit text in the issue description or creation notes if supported, without replacing user-provided content.
+- For issue updates, always send the audit text through `issue.notes` in the same `PUT /issues/{id}.json` request.
+- For writes to related resources that cannot carry notes directly (such as watchers, relations, attachments, or time entries), add an audit note to the associated issue immediately after the write.
+- For deletion, add the audit note to the associated issue before deletion. If the issue itself will be deleted, state in the pre-deletion note that the issue is about to be deleted.
+- Do not claim success in the note before an operation that may fail, except for the required pre-deletion note. For multi-step writes, only summarize steps that actually succeeded.
+- Read-only queries and analyses do not require an audit note.
+
 ## Common Endpoints
 
 - Issue list: `GET /issues.json`

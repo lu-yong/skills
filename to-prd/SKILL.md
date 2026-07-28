@@ -1,74 +1,102 @@
 ---
 name: to-prd
-description: Turn the current conversation context into a PRD and publish it to the project issue tracker. Use when user wants to create a PRD from the current context.
+description: Turn the current conversation and codebase context into a PRD, review it with the user, and publish it as a parent requirement issue in the Nationalchip Redmine instance. Use when the user wants to create, draft, or publish a PRD or consolidate a feature discussion into a Redmine requirement.
 ---
 
-This skill takes the current conversation context and codebase understanding and produces a PRD. Do NOT interview the user — just synthesize what you already know.
+# To PRD
 
-The issue tracker and triage label vocabulary should have been provided to you — invoke the `setup-matt-pocock-skills` skill if not.
+Create a PRD from existing context and publish the approved document to Redmine as the parent issue for subsequent implementation slices.
+
+Use the `redmine` skill for every Redmine read or write. Follow its authentication and secret-handling rules. Do not use GitHub-style labels or assume a `ready-for-agent` label exists.
 
 ## Process
 
-1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the PRD, and respect any ADRs in the area you're touching.
+### 1. Gather context
 
-2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can.
+Synthesize the conversation, referenced Redmine issues, and relevant codebase state. Do not run a broad requirements interview. Ask only when a missing decision would materially change the PRD or when a required Redmine target cannot be resolved safely.
 
-Check with the user that these seams match their expectations.
+If the user supplies a Redmine issue number or URL, fetch its full description, journals, relations, attachments metadata, and children before drafting. Use the project's domain glossary and respect relevant ADRs.
 
-3. Write the PRD using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
+### 2. Resolve the Redmine target
+
+Resolve the project in this order:
+
+1. Explicit project supplied by the user.
+2. Project of a referenced parent/source issue.
+3. Unambiguous project configuration or repository context.
+4. Ask the user if more than one plausible project remains.
+
+Before publishing, query Redmine rather than inventing IDs. Resolve the project's available trackers, statuses, priorities, versions, and relevant custom fields where the API and current user's permissions allow it.
+
+Use these mappings:
+
+- PRD: one parent issue in a requirement-like tracker.
+- Preferred tracker names, in order: the project's configured PRD tracker, `需求`, `Requirement`, then `Feature`.
+- Status and priority: use explicit user/project mappings; otherwise omit them and let Redmine apply project defaults.
+- Target version, assignee, category, watchers, and custom fields: set only when explicitly supplied or unambiguously implied.
+- Agent readiness: map to a real configured Redmine status or custom field only. Never fabricate a label or field. If no mapping exists, leave it unset and mention that in the result.
+
+If no single usable PRD tracker can be selected, ask the user before publishing.
+
+### 3. Design testing seams
+
+Prefer existing test seams and test at the highest stable boundary that verifies external behavior. Propose a new seam only when existing seams cannot express the required behavior.
+
+Record the chosen seams in the draft. Ask for clarification only if the choice is consequential and cannot be inferred from existing project practice.
+
+### 4. Draft and review
+
+Write the PRD with the template below. Avoid implementation file paths and code snippets because they become stale. A concise prototype-derived state machine, schema, reducer, or type shape may be included when it records a decision more precisely than prose; identify it as prototype-derived.
+
+Present the complete draft and the intended Redmine project/tracker before publishing. If the user already explicitly requested immediate publication and all targets are unambiguous, publish without a second confirmation. Otherwise, obtain approval and incorporate requested changes.
 
 <prd-template>
 
 ## Problem Statement
 
-The problem that the user is facing, from the user's perspective.
+Describe the problem from the user's perspective.
 
 ## Solution
 
-The solution to the problem, from the user's perspective.
+Describe the intended solution and observable outcome from the user's perspective.
 
 ## User Stories
 
-A LONG, numbered list of user stories. Each user story should be in the format of:
+Provide a numbered, sufficiently comprehensive list using:
 
-1. As an <actor>, I want a <feature>, so that <benefit>
+1. As an <actor>, I want <capability>, so that <benefit>.
 
-<user-story-example>
-1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
-</user-story-example>
-
-This list of user stories should be extremely extensive and cover all aspects of the feature.
+Cover primary flows, edge cases, permissions, failure handling, operability, and compatibility where relevant. Prefer useful coverage over artificial length.
 
 ## Implementation Decisions
 
-A list of implementation decisions that were made. This can include:
-
-- The modules that will be built/modified
-- The interfaces of those modules that will be modified
-- Technical clarifications from the developer
-- Architectural decisions
-- Schema changes
-- API contracts
-- Specific interactions
-
-Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
-
-Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
+Record durable decisions, including affected modules and interfaces, architecture, schemas, API contracts, compatibility constraints, and important interactions. Do not prescribe incidental implementation details.
 
 ## Testing Decisions
 
-A list of testing decisions that were made. Include:
-
-- A description of what makes a good test (only test external behavior, not implementation details)
-- Which modules will be tested
-- Prior art for the tests (i.e. similar types of tests in the codebase)
+Describe externally observable behaviors, the highest practical test seams, modules or boundaries to test, and relevant prior art in the codebase. Avoid tests coupled to implementation details.
 
 ## Out of Scope
 
-A description of the things that are out of scope for this PRD.
+State explicit exclusions.
 
 ## Further Notes
 
-Any further notes about the feature.
+Record assumptions, unresolved risks, rollout or migration notes, and follow-up decisions.
 
 </prd-template>
+
+### 5. Publish to Redmine
+
+Create one Redmine issue with:
+
+- `project_id`: resolved project.
+- `tracker_id`: resolved PRD tracker.
+- `subject`: concise requirement title; do not prefix it with `PRD` unless project convention requires it.
+- `description`: approved PRD body.
+- Other fields: only those resolved in step 2.
+- `parent_issue_id`: source/parent issue only when the user intends this PRD to be a child of that issue; otherwise omit it.
+
+Do not overwrite or close a referenced source issue. If the user requested a draft only, do not perform a Redmine write.
+
+After creation, return the Redmine issue ID and URL, project, tracker, status, and any requested field that could not be set. Treat the created PRD issue as the parent input for `to-issues`.

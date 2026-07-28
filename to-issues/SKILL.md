@@ -1,83 +1,107 @@
 ---
 name: to-issues
-description: Break a plan, spec, or PRD into independently-grabbable issues on the project issue tracker using tracer-bullet vertical slices. Use when user wants to convert a plan into issues, create implementation tickets, or break down work into issues.
+description: Break a plan, specification, PRD, or Redmine requirement into independently grabbable tracer-bullet issues, review the breakdown, and publish them as related child issues in the Nationalchip Redmine instance. Use when the user wants implementation tickets, task decomposition, child issues, or executable work items created from a plan or requirement.
 ---
 
 # To Issues
 
-Break a plan into independently-grabbable issues using vertical slices (tracer bullets).
+Break source material into thin, end-to-end implementation slices and publish the approved breakdown to Redmine.
 
-The issue tracker and triage label vocabulary should have been provided to you — invoke the `setup-matt-pocock-skills` skill if not.
+Use the `redmine` skill for every Redmine read or write. Follow its authentication and secret-handling rules. Use native Redmine parent-child and issue relations; do not substitute GitHub labels.
 
 ## Process
 
 ### 1. Gather context
 
-Work from whatever is already in the conversation context. If the user passes an issue reference (issue number, URL, or path) as an argument, fetch it from the issue tracker and read its full body and comments.
+Work from the conversation and supplied plan, specification, or PRD. If the user supplies a Redmine issue number or URL, fetch its full description, journals, relations, attachments metadata, and children. Treat that issue as the default parent and its project as the default target.
 
-### 2. Explore the codebase (optional)
+Inspect the codebase when necessary to understand current architecture, domain vocabulary, ADRs, test seams, and realistic delivery boundaries.
 
-If you have not already explored the codebase, do so to understand the current state of the code. Issue titles and descriptions should use the project's domain glossary vocabulary, and respect ADRs in the area you're touching.
+### 2. Resolve Redmine mappings
 
-### 3. Draft vertical slices
+Before publication, query Redmine rather than inventing IDs. Resolve the target project and its available trackers, statuses, priorities, versions, and relevant custom fields where the API and permissions allow it.
 
-Break the plan into **tracer bullet** issues. Each issue is a thin vertical slice that cuts through ALL integration layers end-to-end, NOT a horizontal slice of one layer.
+Use these mappings:
 
-Slices may be 'HITL' or 'AFK'. HITL slices require human interaction, such as an architectural decision or a design review. AFK slices can be implemented and merged without human interaction. Prefer AFK over HITL where possible.
+- Parent: the source PRD/requirement issue when one exists.
+- Implementation slice: a Redmine child issue using `parent_issue_id`.
+- Preferred task tracker names, in order: the project's configured task tracker, `任务`, `Task`, then `Feature`. Use the parent tracker's tracker only when project convention supports it.
+- Status and priority: use explicit user/project mappings; otherwise omit them and let Redmine apply project defaults.
+- Target version and category: inherit from the parent only when valid for the child project and consistent with project convention.
+- Assignee and estimated hours: do not guess.
+- AFK/HITL and agent readiness: map to real configured custom fields or statuses only. If no mapping exists, preserve AFK/HITL in the issue description and leave readiness unset.
 
-<vertical-slice-rules>
-- Each slice delivers a narrow but COMPLETE path through every layer (schema, API, UI, tests)
-- A completed slice is demoable or verifiable on its own
-- Prefer many thin slices over few thick ones
-</vertical-slice-rules>
+If the project or tracker cannot be selected unambiguously, ask the user before publishing.
 
-### 4. Quiz the user
+### 3. Draft tracer-bullet slices
 
-Present the proposed breakdown as a numbered list. For each slice, show:
+Each issue must deliver a narrow but complete path through all applicable layers, such as schema, service, API, UI, integration, migration, observability, and tests. Do not create horizontal layer tickets unless the work is genuinely independent infrastructure with its own verifiable outcome.
 
-- **Title**: short descriptive name
-- **Type**: HITL / AFK
-- **Blocked by**: which other slices (if any) must complete first
-- **User stories covered**: which user stories this addresses (if the source material has them)
+Each slice must be independently grabbable and demoable or verifiable. Prefer several thin slices to a few broad ones, but avoid slices too small to produce observable value.
 
-Ask the user:
+Classify each slice:
 
-- Does the granularity feel right? (too coarse / too fine)
-- Are the dependency relationships correct?
-- Should any slices be merged or split further?
-- Are the correct slices marked as HITL and AFK?
+- **AFK**: an agent or developer can implement and merge it using recorded decisions and acceptance criteria without additional human decisions.
+- **HITL**: a human decision, credential, physical action, design approval, production operation, or other interaction is required.
 
-Iterate until the user approves the breakdown.
+Use dependencies only when sequencing is real. Do not create a chain merely to impose an order.
 
-### 5. Publish the issues to the issue tracker
+### 4. Review the breakdown
 
-For each approved slice, publish a new issue to the issue tracker. Use the issue body template below. These issues are considered ready for AFK agents, so publish them with the correct triage label unless instructed otherwise.
+Present a numbered list before writing to Redmine. For every slice show:
 
-Publish issues in dependency order (blockers first) so you can reference real issue identifiers in the "Blocked by" field.
+- **Title**
+- **Type**: HITL or AFK
+- **Blocked by**: slice numbers or none
+- **User stories covered**: source story numbers when available
+- **Verification**: the observable proof that the slice is complete
+
+Ask whether granularity, dependencies, and HITL/AFK classifications are correct and whether any slices should be merged or split. Iterate until the user approves. Skip this review only when the user explicitly asks for immediate publication and the breakdown is unambiguous.
+
+### 5. Publish in dependency order
+
+Create blockers first so later issues can reference real Redmine IDs. For each slice:
+
+1. Create a Redmine issue using the resolved project and tracker.
+2. Set `parent_issue_id` to the source PRD/requirement issue when available.
+3. Apply only resolved fields; never fabricate statuses, priorities, custom fields, users, or versions.
+4. After both issues exist, create native Redmine relations for real dependencies. If slice A blocks slice B, create a `blocks` relation from A to B using Redmine's issue-relation API.
+5. If relation creation is unavailable or denied, keep the dependency references in the body, report the failure, and do not claim that a native relation was created.
+
+Do not close, rewrite, or change the status of the parent issue unless the user explicitly requests it.
+
+Use this body template:
 
 <issue-template>
+
 ## Parent
 
-A reference to the parent issue on the issue tracker (if the source was an existing issue, otherwise omit this section).
+Reference the parent Redmine issue by ID and URL. Omit this section when no parent exists.
+
+## Type
+
+AFK or HITL. For HITL, state the exact human action or decision required.
 
 ## What to build
 
-A concise description of this vertical slice. Describe the end-to-end behavior, not layer-by-layer implementation.
-
-Avoid specific file paths or code snippets — they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it here and note briefly that it came from a prototype. Trim to the decision-rich parts — not a working demo, just the important bits.
+Describe the end-to-end observable behavior of this slice, not a layer-by-layer task list. Avoid file paths and ordinary code snippets. Include a small prototype-derived decision artifact only when it is more durable and precise than prose.
 
 ## Acceptance criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
-- [ ] Criterion 3
+- [ ] State independently verifiable outcomes.
+- [ ] Include relevant success, failure, permission, compatibility, and observability behavior.
+- [ ] Include the test or demonstration evidence expected for completion.
 
 ## Blocked by
 
-- A reference to the blocking ticket (if any)
+List blocking Redmine issue IDs and URLs, or `None - can start immediately`.
 
-Or "None - can start immediately" if no blockers.
+## User stories covered
+
+List source user-story numbers when available. Omit when the source has no user stories.
 
 </issue-template>
 
-Do NOT close or modify any parent issue.
+### 6. Verify and report
+
+Fetch or inspect the created issues after publication. Verify parent IDs, trackers, statuses, and native dependency relations. Return a compact table containing each issue's ID, URL, title, type, parent, and blockers. Explicitly list any field or relation Redmine rejected or that could not be mapped.
