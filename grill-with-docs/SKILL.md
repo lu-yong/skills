@@ -1,6 +1,7 @@
 ---
 name: grill-with-docs
-description: Use ONLY when the user explicitly asks for a relentless design interview that also maintains ADRs and the domain glossary.
+description: A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.
+disable-model-invocation: true
 ---
 
-Invoke the `grilling` skill together with the `domain-modeling` skill.
+Run a `/grilling` session, using the `/domain-modeling` skill.
