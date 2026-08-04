@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gerrit"
+  short_description: "Read Nationalchip Gerrit changes and patches"
+  default_prompt: "Use $gerrit to inspect a Nationalchip Gerrit change or patch."
