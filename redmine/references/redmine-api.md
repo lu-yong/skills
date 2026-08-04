@@ -23,7 +23,7 @@ description: 当用户查询或者修改redmine任务时
 https://git.nationalchip.com/redmine
 
 ### API Key
-见 `.trae-cn/skills/redmine/SECRET.md`
+见本技能目录下的 `SECRET.md`
 
 ### 认证方式
 三种认证方式任选其一：
