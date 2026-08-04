@@ -14,6 +14,12 @@ Create the `docs/adr/` directory lazily — only when the first ADR is needed.
 
 That's it. An ADR can be a single paragraph. The value is in recording *that* a decision was made and *why* — not in filling out sections.
 
+## Language
+
+Match the language of the ADRs already in the directory; when the directory is empty, write in Simplified Chinese (简体中文). This is decided by the neighbouring files, not by the language of the conversation that produced the decision.
+
+The title and body prose follow that language. Domain terms from `CONTEXT.md`, code identifiers, package names, and file paths stay as the code names them. The filename slug is always ASCII — use the English term or transliterate.
+
 ## Optional sections
 
 Only include these when they add genuine value. Most ADRs won't need them.

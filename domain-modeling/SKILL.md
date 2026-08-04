@@ -7,6 +7,14 @@ description: Build and sharpen a project's domain model. Use when the user wants
 
 Actively build and sharpen the project's domain model as you design. This is the *active* discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `CONTEXT.md` for vocabulary is not this skill — that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
+## Written language
+
+Write the prose of `CONTEXT.md` and ADRs in the language of the docs already beside them — check the existing `CONTEXT.md` and the sibling files in `docs/adr/` before writing. When there's nothing to follow, write the prose in Simplified Chinese (简体中文). Never flip an established corpus part-way: a half-translated ADR set is worse than a consistent one in either language.
+
+The conversation's language does not decide this. A grilling session held in Chinese still appends English ADRs to an English `docs/adr/`.
+
+Prose is the only thing that varies. Domain terms, code identifiers, file paths, package names, class names, API names, and protocol names stay as the code names them — they are the ubiquitous language shared with the codebase, and translating them breaks the link between the glossary and the code.
+
 ## File structure
 
 Most repos have a single context:
