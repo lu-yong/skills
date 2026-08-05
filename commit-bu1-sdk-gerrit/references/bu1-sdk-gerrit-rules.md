@@ -1,18 +1,21 @@
 # Nationalchip Gerrit Patch Rules
 
-## 来源与版本
+## 来源与快照元数据
 - 项目：`BU1-SDK-2007-01-UNIFY`
 - 项目标识：`bu1-sdk`
+- 在线来源由 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md) 统一读取和维护；本文件是 `commit-bu1-sdk-gerrit` 执行时唯一使用的规则来源。
+- `source_version: Gerrit使用规则=12; Gerrit补丁生成细则=9`
+- `source_updated_on: Gerrit使用规则=2022-05-16T11:19:49Z; Gerrit补丁生成细则=2023-08-23T10:58:16Z`
+- `checked_at: INVALID_UNTIL_REFRESH`
+- `checked_by: UNKNOWN_UNTIL_REFRESH`
+- `checked_at` 必须由刷新 skill 在成功核对在线页面后写入 UTC ISO 8601 时间；30 天期限只根据 `checked_at` 判断。当前快照缺少可信核对时间，业务 skill 必须先要求刷新。
+- 在线 Wiki 与本地内容的差异只由刷新 skill 展示和处理；本业务 skill 不访问在线 Wiki、不刷新规则、不修改本文件。
 
-当前规则优先通过 Redmine REST Wiki API 获取：
+当前快照整理自以下 Redmine REST Wiki API 页面：
+- `GET https://git.nationalchip.com/redmine/projects/bu1-sdk/wiki/Gerrit%E4%BD%BF%E7%94%A8%E8%A7%84%E5%88%99.json`：页面 `Gerrit使用规则`，快照来源 version `12`，`updated_on` 为 `2022-05-16T11:19:49Z`。
+- `GET https://git.nationalchip.com/redmine/projects/bu1-sdk/wiki/Gerrit%E8%A1%A5%E4%B8%81%E7%94%9F%E6%88%90%E7%BB%86%E5%88%99.json`：页面 `Gerrit补丁生成细则`，快照来源 version `9`，`updated_on` 为 `2023-08-23T10:58:16Z`。
+- API 返回正文位于 `wiki_page.text`，读取和刷新遵守现有 **Redmine** skill 的认证与秘密处理要求。
 
-- `GET https://git.nationalchip.com/redmine/projects/bu1-sdk/wiki/Gerrit%E4%BD%BF%E7%94%A8%E8%A7%84%E5%88%99.json`：页面 `Gerrit使用规则`，已核对 version `12`，`updated_on` 为 `2022-05-16T11:19:49Z`。
-- `GET https://git.nationalchip.com/redmine/projects/bu1-sdk/wiki/Gerrit%E8%A1%A5%E4%B8%81%E7%94%9F%E6%88%90%E7%BB%86%E5%88%99.json`：页面 `Gerrit补丁生成细则`，已核对 version `9`，`updated_on` 为 `2023-08-23T10:58:16Z`。
-- API 返回正文位于 `wiki_page.text`，格式为 Redmine Textile。读取时使用现有 **Redmine** skill 的 API 认证，不依赖网页登录态，不打印 API key。
-
-- 在线页面：<https://git.nationalchip.com/redmine/projects/bu1-sdk/wiki/Gerrit%E4%BD%BF%E7%94%A8%E8%A7%84%E5%88%99#%E8%A1%A5%E4%B8%81%E4%BB%A3%E7%A0%81%E6%8F%90%E4%BA%A4%E8%80%85%E8%A7%92%E8%89%B2%E8%A6%81%E6%B1%82>
-
-本文件整理自上述两个 Wiki 页面的当前 API 内容。在线 API 页面优先级更高；刷新成功后更新本文件中的规则、version 和 `updated_on`。
 ## 公版 Gerrit 流程
 
 Wiki 描述的流程是：

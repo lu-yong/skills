@@ -1,14 +1,18 @@
 # BU1-SDK Redmine 结论与字段规则
 
-## 来源
-
+## 来源与快照元数据
 - 项目：`BU1-SDK-2007-01-UNIFY`
 - 项目标识：`bu1-sdk`
-- Wiki：<https://git.nationalchip.com/redmine/projects/bu1-sdk/wiki/Redmine%E4%BD%BF%E7%94%A8%E8%A7%84%E5%88%99#%E5%A4%84%E7%90%86%E4%BB%BB%E5%8A%A1%E8%A6%81>
-- 当前已核对页面：`Redmine使用规则`，wiki version `98`
+- 在线来源由 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md) 统一读取和维护；本文件是 `update-bu1-sdk-issue-conclusion` 执行时唯一使用的规则来源。
+- 来源 Wiki：`Redmine使用规则`，source version `98`。
+- `source_version: 98`
+- `source_updated_on: UNKNOWN_UNTIL_REFRESH`
+- `checked_at: INVALID_UNTIL_REFRESH`
+- `checked_by: UNKNOWN_UNTIL_REFRESH`
+- `checked_at` 必须由刷新 skill 在成功核对在线页面后写入 UTC ISO 8601 时间；30 天期限只根据 `checked_at` 判断。当前快照缺少可信核对时间，业务 skill 必须先要求刷新。
+- 在线 Wiki 与本地内容的差异只由刷新 skill 展示和处理；本业务 skill 不访问在线 Wiki、不刷新规则、不修改本文件。
 
-本文件只摘录“处理任务要求”和相关标签定义中与本 skill 直接相关的规则，不替代完整 wiki。遇到本文件未覆盖的情形，以在线 wiki 为准。
-
+本文件只摘录“处理任务要求”和相关标签定义中与本 skill 直接相关的规则，不替代在线页面；在线页面只由刷新 skill 读取。
 ## 跟踪类型与字段矩阵
 
 `结论`是本 skill 的核心字段，对所有跟踪类型都需要在草稿中填写和确认。除此之外，根据 issue 的精确跟踪类型填写以下字段：
@@ -119,13 +123,10 @@
 - 本 skill 会根据跟踪类型更新对应的状态、元数据字段和结论；不会自动修改该跟踪类型未要求的字段或其他 unrelated 字段。
 - 草稿应如实报告已核实的分支和补丁信息；四项 `已解决` 前置条件使用用户提供的四行确认，不推断或补齐未确认的值。
 
-## 缓存与刷新
-
-正常执行优先使用本地规则。刷新在线 wiki 的条件：
-
-- 本文件不存在；
-- 本文件距上次核对已超过 30 天；
-- 用户明确要求刷新规则，或告知规则已变更；
-- issue 属于本文件未覆盖的特殊性质或流程。
-
-刷新成功后，更新本文件中的 wiki version 和规则内容。刷新失败但本文件存在时，可以使用本地规则继续生成草稿，但必须明确告知用户使用的是缓存规则；刷新失败且本文件不存在时，停止并请求用户提供规则文本。
+## 快照使用与刷新
+正常执行只读取本地规则快照。业务 skill 不访问在线 Wiki，也不根据 issue 特殊情况自行刷新或修改本文件。
+- 快照不存在、元数据无效、`checked_at` 无法解析或 `checked_at` 距当前 UTC 时间超过 30 天：停止并要求用户调用 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md)。
+- 刷新事务标记 `refresh-bu1-sdk-rules/.refresh.pending` 存在：停止，等待刷新完成或按刷新 skill 的异常恢复流程处理。
+- 刷新失败但旧快照完整且用户明确回复本次使用旧快照：可以继续，必须在草稿和最终报告中披露 `checked_at` 和旧快照状态。
+- 规则内容未覆盖当前场景：停止并要求先刷新或由用户提供明确规则，不在线补齐、不自行发明格式。
+- 刷新成功后由刷新 skill 更新本文件的规则内容和元数据；本 skill 不执行更新。
