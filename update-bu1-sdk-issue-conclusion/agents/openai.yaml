@@ -1,0 +1,6 @@
+interface:
+  display_name: "BU1-SDK Issue Conclusion"
+  short_description: "Draft and confirm BU1-SDK Redmine issue conclusions"
+  default_prompt: "Use $update-bu1-sdk-issue-conclusion to draft and, after confirmation, update a BU1-SDK Redmine issue conclusion."
+policy:
+  allow_implicit_invocation: false
