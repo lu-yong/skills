@@ -81,7 +81,7 @@ Body 和 Footer 都是可选的；如果存在，Subject、Body、Footer 之间�
 
 - 使用关联任务的 Redmine 问题号。
 - Redmine 问题必须真实存在并可由当前凭据访问。
-- 针对公版项目，必须关联 Unify 项目的 Redmine 记录；无法判断当前仓库是否属于公版项目，或问题不属于要求的 Unify 项目时，询问用户。
+- Redmine `issue.project.identifier` 必须精确为 `bu1-sdk`；commit message 使用已验证的关联任务问题号，不需要额外关联 Unify 项目记录。
 
 ### Subject
 
@@ -115,4 +115,4 @@ Body 和 Footer 都是可选的；如果存在，Subject、Body、Footer 之间�
 - 在展示完整 commit message 草稿并得到用户明确确认前，不执行本次流程的 `git add`、`git commit` 或 `git push`。
 - 在 commit 前验证提交消息符合本文件的格式，并验证 `commit-msg` hook 生成合法 `Change-Id`。
 - push 成功后必须单独报告干净版本补丁测试和 Review+1 的状态；未知状态保持未知。
-- 规则不明确、依赖状态不明、提交者角色不明或公版/Unify 项目关系不明时，先询问用户。提交前自测由用户保证，不要求用户提供测试输出，也不因缺少自测证据停止。
+- 规则不明确、依赖状态不明、提交者角色不明或 Redmine 项目标识不明/不匹配时，先询问用户。提交前自测由用户保证，不要求用户提供测试输出，也不因缺少自测证据停止。

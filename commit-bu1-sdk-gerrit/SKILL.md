@@ -11,7 +11,7 @@ disable-model-invocation: true
 ## 不可变前置条件
 
 - 必须要求用户提供一个 Redmine 问题号。只接受匹配 `^[1-9][0-9]*$` 的单个正整数；拒绝 URL、`#123`、范围、逗号分隔值、带前后其他文字的值和非十进制 ID。
-- 使用可用的 **Redmine** skill 读取 `https://git.nationalchip.com/redmine/issues/<id>.json`，确认该问题存在且当前凭据可访问。记录问题号、项目标识、标题、跟踪类型和状态；无法访问或问题不存在时停止并询问用户。
+- 使用可用的 **Redmine** skill 读取 `https://git.nationalchip.com/redmine/issues/<id>.json`，确认该问题存在、当前凭据可访问，并且 `issue.project.identifier` 精确等于 `bu1-sdk`；项目标识缺失或不匹配时停止。记录问题号、项目标识、标题、跟踪类型和状态；无法访问或问题不存在时停止并询问用户。
 - 业务规则唯一来自本 skill 的本地快照 [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md)，在生成草稿前完整阅读。运行过程中不访问在线 Wiki，不刷新在线规则，也不写入或静默修改任何 reference 文件。
 - 规则快照的在线来源和版本元数据保留在 reference 中；需要检查或更新快照时，停止当前业务流程并请用户单独调用 [refresh-bu1-sdk-rules](../refresh-bu1-sdk-rules/SKILL.md)。刷新 skill 的结果不会由本 skill 自动接受或覆盖。
 - 开始规则检查时确认 reference 存在、可读，并且 `source_version`、`source_updated_on`、`checked_at`、`checked_by` 元数据存在；`checked_at` 必须是可解析的 UTC ISO 8601 时间。缺失或元数据无效时停止，要求先维护快照。
@@ -65,7 +65,7 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
 
 ## 阶段一：检查并生成草稿
 
-1. 先验证 Redmine 问题号并读取问题详情。问题号合法只表示格式正确；只有 API 成功返回问题详情才算“合法问题号”。
+1. 先验证 Redmine 问题号并读取问题详情。问题号合法只表示格式正确；只有 API 成功返回问题详情且 `issue.project.identifier` 精确等于 `bu1-sdk` 才算“合法问题号”。项目标识缺失或不匹配时停止，不生成草稿。commit message 中使用的 Redmine ID 就是该已验证的问题号，不另行要求 Unify 关联。
 2. 在继续规则分析前读取本地 reference 及其快照元数据。若快照缺失或元数据无效，停止并要求用户调用刷新 skill。若快照过期，按前置条件要求披露并取得本次使用旧快照的明确许可。
 3. 解析仓库根目录并收集当前状态：
    - `git rev-parse --show-toplevel`
@@ -92,13 +92,13 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
    test -x "$commit_msg_hook" || { printf '%s\n' '缺少可执行 commit-msg hook' >&2; exit 1; }
    ```
    如果仓库使用 `core.hooksPath`，以 Git 解析出的路径为准。
-7. 完整读取并应用 [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md)：校验 `Type: [Redmine ID]: [Subject]` 结构、Type 值、Subject 不超过 50 个字符、Subject 主体为简体中文、祈使语气、专有名词英文例外、无句号规则、Body 每行 72 字符限制、Footer 可选性、Redmine 关联以及公版项目的 Unify 问题要求。草稿标注使用的 `source_version`、`checked_at` 和 `checked_by`。
+7. 完整读取并应用 [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md)：校验 `Type: [Redmine ID]: [Subject]` 结构、Type 值、Subject 不超过 50 个字符、Subject 主体为简体中文、祈使语气、专有名词英文例外、无句号规则、Body 每行 72 字符限制、Footer 可选性和已验证的 Redmine 关联。草稿标注使用的 `source_version`、`checked_at` 和 `checked_by`。
    - 根据实际变更选择唯一可靠的 Type；无法判断时列出候选并询问用户。Subject 必须简洁准确描述补丁，不直接照搬 Redmine 标题。完整 commit message 只能写入已确认事实。
    - 提交者对提交前的代码规范、无多余代码和无多余文件作出保证；本 skill 不要求用户提供自测日志、命令或测试输出，也不因缺少自测证据而停止。除非用户明确说明尚未自测或要求协助测试，否则将自测功能正常视为用户保证。
    - 记录提交后在干净版本上打补丁并进行完整功能测试、提交者自 Review+1、Reviewer 和依赖补丁的状态；这些状态未知时保持未知，不在草稿或最终报告中假设已完成。每项规则都要能指出本地规则引用或当前事实。
 8. 生成提交消息草稿。草稿必须只使用已确认事实，且完整显示拟提交的 subject、body 和 footer；Redmine 问题号必须按已读取规则的精确格式关联。不要把本地路径、未验证的测试结果或猜测写成事实。
 9. 向用户展示以下内容，然后停止等待明确确认：
-   - Redmine 问题详情和访问结果。
+   - Redmine 问题详情、已验证的 `issue.project.identifier == bu1-sdk` 和访问结果。
    - Git 仓库、当前工作分支、目标分支、push remote 和推送范围。
    - 变更文件清单及简短的事实性摘要。
    - 本地规则快照的来源页面、版本、`checked_at`、`checked_by`，以及是否使用了过期快照。
@@ -139,4 +139,4 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
 
 ## 停止条件
 
-遇到凭据不可用、Redmine 问题号不存在、本地规则快照缺失或元数据无效、快照过期且用户未明确接受旧快照、刷新事务正在进行、规则冲突、阶段零本地工作分支硬门槛失败、提交者角色无法确认、公版/Unify 项目关系不明、分支/remote/目标分支无法确认、工作区在确认后变化、用户指定范围包含已有范围外 staged 路径、git add 后或 commit 前 staged 路径超出确认范围、范围包含未经确认的敏感或无关文件、commit-msg hook 缺失、消息不符合规则、Change-Id 缺失、commit 失败或 push 失败，都必须停在当前阶段并向用户说明具体原因。业务流程不得通过网络补齐规则，也不得自行改写 reference、取消用户已有暂存或扩大提交范围。阶段零失败时不得继续读取 Redmine、分析变更或生成 commit 草稿；用户创建并切换本地工作分支后重新调用 skill。提交前自测由用户保证，不因缺少测试证据停止。任何不确定的规则或事实都先询问用户，不能用经验值补齐。
+遇到凭据不可用、Redmine 问题号不存在、Redmine 项目标识缺失或不是 `bu1-sdk`、本地规则快照缺失或元数据无效、快照过期且用户未明确接受旧快照、刷新事务正在进行、规则冲突、阶段零本地工作分支硬门槛失败、提交者角色无法确认、分支/remote/目标分支无法确认、工作区在确认后变化、用户指定范围包含已有范围外 staged 路径、git add 后或 commit 前 staged 路径超出确认范围、范围包含未经确认的敏感或无关文件、commit-msg hook 缺失、消息不符合规则、Change-Id 缺失、commit 失败或 push 失败，都必须停在当前阶段并向用户说明具体原因。业务流程不得通过网络补齐规则，也不得自行改写 reference、取消用户已有暂存或扩大提交范围。阶段零失败时不得继续读取 Redmine、分析 Git 修改或生成 commit 草稿；用户创建并切换本地工作分支后重新调用 skill。提交前自测由用户保证，不因缺少测试证据停止。任何不确定的规则或事实都先询问用户，不能用经验值补齐。
