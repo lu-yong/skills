@@ -122,8 +122,8 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
 
 ## 阶段三：amend 选择、提交和推送
 
-1. 只接受阶段二选项中的单独输入 `1` 或 `2`：输入 `1` 时确认 `HEAD` 存在且用户理解这会改写当前最新提交，然后执行 amend；输入 `2` 时创建新提交。任何其他输入都是非法，重新展示选项并询问，不自行选择。
-2. 用临时文件保存已确认的完整 commit message，使用 `git commit -F <temporary-message-file>`；amend 使用 `git commit --amend -F <temporary-message-file>`。设置 `GIT_EDITOR=true`，避免打开交互式编辑器；不要把临时文件放进仓库。提交失败时保留暂存区并报告错误，不推送。
+1. 只接受阶段二选项中的单独输入 `1` 或 `2`：输入 `1` 时确认 `HEAD` 存在且用户理解这会改写当前最新提交，然后执行 amend；输入 `2` 时创建新提交。任何其他输入都是非法，重新展示选项并询问，不自行选择。选择 `1` 后，不得用阶段一为新提交生成的草稿直接覆盖 `HEAD` 的原有消息：先读取并记录 `HEAD` 的完整 commit message，将本次已确认 staged 变更的事实性摘要作为新段落追加到现有 Body。必须原样保留 `HEAD` 已有的 Subject、Body 和 Footer；摘要插入现有 Footer（包括 `Change-Id`）之前；没有 Footer 时才追加到消息末尾。无法可靠识别 Footer，或无法从实际变更中生成事实性摘要时，停止并询问。
+2. 用临时文件保存最终 commit message：新提交使用阶段一已确认的完整草稿；amend 使用按上一步规则合成、并在 commit 前展示核对的消息，执行 `git commit --amend -F <temporary-message-file>`。设置 `GIT_EDITOR=true`，避免打开交互式编辑器；不要把临时文件放进仓库。提交失败时保留暂存区并报告错误，不推送。
 3. 执行 commit 前再次使用 NUL-safe 的 `git diff --cached --name-only -z` 检查 staged 路径集合。用户指定范围时，任一路径不属于 `confirmed-paths` 都使流程停止；同时记录实际 staged 集合，供提交后比较实际 commit 范围。
 4. 提交成功后验证：`git status --short`、`git show --stat --oneline HEAD`、`git diff-tree --no-commit-id --name-only -r HEAD -z`、完整 commit message、作者和 `Change-Id`。将实际 commit 路径集合与 commit 前记录的 staged 集合比较；若路径集合不一致、hook 改写了消息、没有合法 Change-Id 或提交结果与草稿不一致，停止推送并询问用户。
 5. 提交成功且所有规则/前置条件复核通过后，使用阶段零已确认的 remote 和目标 branch 推送到 Gerrit 审核 ref；不重新读取或选择 remote，不改写为普通分支 push，不添加 `--force`：
