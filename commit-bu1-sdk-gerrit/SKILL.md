@@ -73,7 +73,10 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
    - `git branch --show-current`
    - 当前分支的 remote、merge 配置和 push URL。
    默认范围要列出所有会被提交的路径，包括删除、修改、新增和已暂存路径。对未跟踪文件读取必要内容以便检查是否是敏感文件、生成物或与问题无关的内容；不要把文件内容或凭据输出给用户。
-4. 以 `HEAD` 为基线检查完整变更：已暂存和未暂存变更使用 `git diff --binary HEAD`；未跟踪文件单独检查。记录用于后续复核的工作区快照（状态、变更内容摘要和未跟踪文件 hash）。如果用户明确指定了范围，确认指定范围内每个路径都存在于快照中，并把范围显示在草稿里。
+4. 以 `HEAD` 为基线检查完整变更：已暂存和未暂存变更使用 `git diff --binary HEAD`；未跟踪文件单独检查。记录用于后续复核的工作区快照（状态、变更内容摘要和未跟踪文件 hash）。如果用户明确指定了范围：
+   - 先使用 NUL-safe 的 `git diff --cached --name-only -z` 读取调用 skill 前已经存在的 index 路径，并按完整路径集合与 `confirmed-paths` 比较；覆盖修改、新增、删除、重命名和带空格的路径。
+   - 任何已有 staged 路径不属于确认范围时，立即停止，展示路径、当前范围和阻塞原因，要求用户明确扩大范围或自行处理；不要执行 `git restore --staged`，不要静默改变用户 index。
+   - 没有范围外路径时，确认指定范围内每个路径都存在于快照中，并把范围、已有 staged 路径和本次待加入路径分别记录在草稿中。
 5. 复核阶段零固定的工作分支目标：
    - 重新读取当前分支的 `branch.<local_branch>.remote`、该 remote 的唯一 `pushurl`（没有时使用唯一 `url`）、解析出的 host 和 `branch.<local_branch>.merge`。
    - 将这些当前值与阶段零保存的 `confirmed_remote_name`、`confirmed_push_url`、`confirmed_remote_host`、`confirmed_dest_branch` 逐项比较。
@@ -111,7 +114,7 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
 3. 确认快照未变化后才执行 `git add`：
    - 默认范围：在仓库根目录执行 `git add -A -- .`。
    - 用户指定范围：仅对确认过的路径执行 `git add -A -- <confirmed-paths>`，正确处理删除和带空格的路径。
-4. 用 `git diff --cached --check`、`git diff --cached --stat`、`git diff --cached --name-status` 和必要的 `git diff --cached` 复核暂存内容。若暂存结果超出确认范围、规则不允许或校验失败，停止，不提交。
+4. 用 `git diff --cached --check`、`git diff --cached --stat`、NUL-safe 的 `git diff --cached --name-only -z` 和必要的 `git diff --cached` 复核暂存内容。用户指定范围时，暂存路径集合必须是 `confirmed-paths` 的子集；任一路径超出范围、规则不允许或校验失败，停止，不提交，不执行 `git restore --staged`。
 5. 将实际暂存文件清单、暂存统计和仍存在的风险告知用户。此时仍不要执行 commit，并展示以下固定选项：
    1. `amend`
    2. `不amend`
@@ -121,8 +124,9 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
 
 1. 只接受阶段二选项中的单独输入 `1` 或 `2`：输入 `1` 时确认 `HEAD` 存在且用户理解这会改写当前最新提交，然后执行 amend；输入 `2` 时创建新提交。任何其他输入都是非法，重新展示选项并询问，不自行选择。
 2. 用临时文件保存已确认的完整 commit message，使用 `git commit -F <temporary-message-file>`；amend 使用 `git commit --amend -F <temporary-message-file>`。设置 `GIT_EDITOR=true`，避免打开交互式编辑器；不要把临时文件放进仓库。提交失败时保留暂存区并报告错误，不推送。
-3. 提交成功后验证：`git status --short`、`git show --stat --oneline HEAD`、完整 commit message、作者和 `Change-Id`。若 hook 改写了消息，重新检查其是否仍满足 Gerrit 规则；若没有合法 Change-Id 或提交结果与草稿不一致，停止推送并询问用户。
-4. 提交成功且所有规则/前置条件复核通过后，使用阶段零已确认的 remote 和目标 branch 推送到 Gerrit 审核 ref；不重新读取或选择 remote，不改写为普通分支 push，不添加 `--force`：
+3. 执行 commit 前再次使用 NUL-safe 的 `git diff --cached --name-only -z` 检查 staged 路径集合。用户指定范围时，任一路径不属于 `confirmed-paths` 都使流程停止；同时记录实际 staged 集合，供提交后比较实际 commit 范围。
+4. 提交成功后验证：`git status --short`、`git show --stat --oneline HEAD`、`git diff-tree --no-commit-id --name-only -r HEAD -z`、完整 commit message、作者和 `Change-Id`。将实际 commit 路径集合与 commit 前记录的 staged 集合比较；若路径集合不一致、hook 改写了消息、没有合法 Change-Id 或提交结果与草稿不一致，停止推送并询问用户。
+5. 提交成功且所有规则/前置条件复核通过后，使用阶段零已确认的 remote 和目标 branch 推送到 Gerrit 审核 ref；不重新读取或选择 remote，不改写为普通分支 push，不添加 `--force`：
    ```bash
    git push \
         --receive-pack='gerrit receive-pack' \
@@ -130,9 +134,9 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
         "$confirmed_remote_name" \
         "refs/heads/$local_branch:refs/for/$confirmed_dest_branch"
    ```
-   5. 只有 `git push` 返回成功才报告补丁已提交到 Gerrit 审核。最终报告包含 Redmine 问题号、提交 SHA、是否 amend、提交消息摘要、阶段零已确认的 `confirmed_remote_name`、`local_branch`、`confirmed_dest_branch` 和 Gerrit 审核 ref；推送失败时原样总结错误和下一步，不声称补丁已进入审核。
+6. 只有 `git push` 返回成功才报告补丁已提交到 Gerrit 审核。最终报告包含 Redmine 问题号、提交 SHA、是否 amend、提交消息摘要、阶段零已确认的 `confirmed_remote_name`、`local_branch`、`confirmed_dest_branch` 和 Gerrit 审核 ref；推送失败时原样总结错误和下一步，不声称补丁已进入审核。
    - 单独报告“干净版本打补丁后的完整功能测试”和提交者自 Review+1 的状态；如果尚未完成或用户没有提供证据，标记为“待完成/未知”，不得写成通过。
 
 ## 停止条件
 
-遇到凭据不可用、Redmine 问题号不存在、本地规则快照缺失或元数据无效、快照过期且用户未明确接受旧快照、刷新事务正在进行、规则冲突、阶段零本地工作分支硬门槛失败、提交者角色无法确认、公版/Unify 项目关系不明、分支/remote/目标分支无法确认、工作区在确认后变化、范围包含未经确认的敏感或无关文件、commit-msg hook 缺失、消息不符合规则、Change-Id 缺失、commit 失败或 push 失败，都必须停在当前阶段并向用户说明具体原因。业务流程不得通过网络补齐规则，也不得自行改写 reference。阶段零失败时不得继续读取 Redmine、分析变更或生成 commit 草稿；用户创建并切换本地工作分支后重新调用 skill。提交前自测由用户保证，不因缺少测试证据停止。任何不确定的规则或事实都先询问用户，不能用经验值补齐。
+遇到凭据不可用、Redmine 问题号不存在、本地规则快照缺失或元数据无效、快照过期且用户未明确接受旧快照、刷新事务正在进行、规则冲突、阶段零本地工作分支硬门槛失败、提交者角色无法确认、公版/Unify 项目关系不明、分支/remote/目标分支无法确认、工作区在确认后变化、用户指定范围包含已有范围外 staged 路径、git add 后或 commit 前 staged 路径超出确认范围、范围包含未经确认的敏感或无关文件、commit-msg hook 缺失、消息不符合规则、Change-Id 缺失、commit 失败或 push 失败，都必须停在当前阶段并向用户说明具体原因。业务流程不得通过网络补齐规则，也不得自行改写 reference、取消用户已有暂存或扩大提交范围。阶段零失败时不得继续读取 Redmine、分析变更或生成 commit 草稿；用户创建并切换本地工作分支后重新调用 skill。提交前自测由用户保证，不因缺少测试证据停止。任何不确定的规则或事实都先询问用户，不能用经验值补齐。
