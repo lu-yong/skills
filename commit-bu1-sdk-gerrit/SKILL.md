@@ -36,9 +36,29 @@ case "$local_branch" in
   main|master|develop|sdk-release) printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前分支是基础分支，不是本地工作分支。请先创建并切换 topic/work 分支后重新调用 skill。' >&2; exit 1 ;;
 esac
 test "$local_branch" != "$dest_branch" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前本地分支与 Gerrit 目标分支相同，不是独立工作分支。请先创建并切换工作分支后重新调用 skill。' >&2; exit 1; }
-remote_name=$(git remote -v | awk '$3 == "(push)" {print $1; exit}')
-test -n "$remote_name" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：没有可用的 Gerrit push remote。请先配置工作分支和 remote 后重新调用 skill。' >&2; exit 1; }
-git ls-remote --exit-code --heads "$remote_name" "refs/heads/$dest_branch" >/dev/null || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：Gerrit 目标分支尚未创建或当前 remote 无法访问。请先确认目标分支和 remote 后重新调用 skill。' >&2; exit 1; }
+remote_name=$(git config --get "branch.$local_branch.remote")
+test -n "$remote_name" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前分支没有配置 branch.<local_branch>.remote。请先配置工作分支对应的 push remote 后重新调用 skill。' >&2; exit 1; }
+pushurl_count=$(git config --get-all "remote.$remote_name.pushurl" | wc -l | tr -d ' ')
+if [ "$pushurl_count" -gt 1 ]; then printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前分支对应 remote 配置了多个 pushurl，无法唯一确定推送目标。请先处理 remote 配置后重新调用 skill。' >&2; exit 1; fi
+if [ "$pushurl_count" -eq 1 ]; then
+  push_url=$(git config --get "remote.$remote_name.pushurl")
+else
+  url_count=$(git config --get-all "remote.$remote_name.url" | wc -l | tr -d ' ')
+  test "$url_count" -eq 1 || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前 remote 没有唯一 pushurl 或 url，无法确定推送目标。请先处理 remote 配置后重新调用 skill。' >&2; exit 1; }
+  push_url=$(git config --get "remote.$remote_name.url")
+fi
+test -n "$push_url" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前 remote 的推送 URL 为空。请先配置 remote 后重新调用 skill。' >&2; exit 1; }
+remote_host=$(printf '%s\n' "$push_url" | sed -E 's#^[^:]+://([^@/]+@)?([^/:]+).*#\2#; s#^[^@]+@([^:]+):.*#\1#')
+case "$remote_host" in
+  git.nationalchip.com|gerrit.nationalchip.com) ;;
+  *) printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：push URL host 不是允许的公司 Gerrit host。请先确认 remote 配置后重新调用 skill。' >&2; exit 1 ;;
+esac
+git ls-remote --exit-code --heads "$push_url" "refs/heads/$dest_branch" >/dev/null || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：Gerrit 目标分支尚未创建或当前 push URL 无法访问。请先确认目标分支和 push URL 后重新调用 skill。' >&2; exit 1; }
+confirmed_remote_name="$remote_name"
+confirmed_push_url="$push_url"
+confirmed_remote_host="$remote_host"
+confirmed_dest_branch="$dest_branch"
+printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和目标 branch。后续阶段只能复核并使用这些已确认值。'
 ```
 
 以上任一检查失败时，立即结束本次 skill 调用，不读取 Redmine、不分析 Git 修改、不生成 commit 草稿，也不执行任何 `git add`、`git commit` 或 `git push`。不要自动创建、切换、改名或修复分支。用户需要先完成本地工作分支创建/切换及目标分支配置，再重新调用 skill。
@@ -54,17 +74,15 @@ git ls-remote --exit-code --heads "$remote_name" "refs/heads/$dest_branch" >/dev
    - 当前分支的 remote、merge 配置和 push URL。
    默认范围要列出所有会被提交的路径，包括删除、修改、新增和已暂存路径。对未跟踪文件读取必要内容以便检查是否是敏感文件、生成物或与问题无关的内容；不要把文件内容或凭据输出给用户。
 4. 以 `HEAD` 为基线检查完整变更：已暂存和未暂存变更使用 `git diff --binary HEAD`；未跟踪文件单独检查。记录用于后续复核的工作区快照（状态、变更内容摘要和未跟踪文件 hash）。如果用户明确指定了范围，确认指定范围内每个路径都存在于快照中，并把范围显示在草稿里。
-5. 检查工作分支和目标分支：
+5. 复核阶段零固定的工作分支目标：
+   - 重新读取当前分支的 `branch.<local_branch>.remote`、该 remote 的唯一 `pushurl`（没有时使用唯一 `url`）、解析出的 host 和 `branch.<local_branch>.merge`。
+   - 将这些当前值与阶段零保存的 `confirmed_remote_name`、`confirmed_push_url`、`confirmed_remote_host`、`confirmed_dest_branch` 逐项比较。
+   - 任一值变化、缺失、出现多个候选或 host 不在白名单时，停止并重新生成草稿；不得重新选择另一个 remote。
+   - 使用阶段零已确认的目标执行目标分支存在性检查：
    ```bash
-   local_branch=$(git branch --show-current)
-   test -n "$local_branch" || { printf '%s\n' '当前处于 detached HEAD，无法提交 Gerrit' >&2; exit 1; }
-   dest_branch=$(git config --get "branch.$local_branch.merge" | sed 's#^refs/heads/##')
-   test -n "$dest_branch" || { printf '%s\n' '当前工作分支没有配置目标分支' >&2; exit 1; }
-   remote_name=$(git remote -v | awk '$3 == "(push)" {print $1; exit}')
-   test -n "$remote_name" || { printf '%s\n' '没有可用的 push remote' >&2; exit 1; }
-   git ls-remote --exit-code --heads "$remote_name" "refs/heads/$dest_branch" >/dev/null
+   git ls-remote --exit-code --heads "$confirmed_push_url" "refs/heads/$confirmed_dest_branch" >/dev/null
    ```
-   同时确认 push URL 指向公司 Gerrit（通常是 `git.nationalchip.com` 或 `gerrit.nationalchip.com`）。远端主机、目标分支或 remote 有歧义时询问用户，不要将 GitHub 等其他 remote 当作公司 Gerrit。
+   草稿展示 remote 名称、push URL（按秘密处理规则脱敏）、host、目标 branch 和一致性校验结果。
 6. 检查仓库 hooks 路径：
    ```bash
    commit_msg_hook=$(git rev-parse --git-path hooks/commit-msg)
@@ -104,19 +122,15 @@ git ls-remote --exit-code --heads "$remote_name" "refs/heads/$dest_branch" >/dev
 1. 只接受阶段二选项中的单独输入 `1` 或 `2`：输入 `1` 时确认 `HEAD` 存在且用户理解这会改写当前最新提交，然后执行 amend；输入 `2` 时创建新提交。任何其他输入都是非法，重新展示选项并询问，不自行选择。
 2. 用临时文件保存已确认的完整 commit message，使用 `git commit -F <temporary-message-file>`；amend 使用 `git commit --amend -F <temporary-message-file>`。设置 `GIT_EDITOR=true`，避免打开交互式编辑器；不要把临时文件放进仓库。提交失败时保留暂存区并报告错误，不推送。
 3. 提交成功后验证：`git status --short`、`git show --stat --oneline HEAD`、完整 commit message、作者和 `Change-Id`。若 hook 改写了消息，重新检查其是否仍满足 Gerrit 规则；若没有合法 Change-Id 或提交结果与草稿不一致，停止推送并询问用户。
-4. 提交成功且所有规则/前置条件复核通过后，使用以下命令推送到 Gerrit 审核 ref，不改写为普通分支 push，不添加 `--force`：
+4. 提交成功且所有规则/前置条件复核通过后，使用阶段零已确认的 remote 和目标 branch 推送到 Gerrit 审核 ref；不重新读取或选择 remote，不改写为普通分支 push，不添加 `--force`：
    ```bash
-   remote_name=$(git remote -v | awk '$3 == "(push)" {print $1; exit}')
-   local_branch=$(git branch --show-current)
-   dest_branch=$(git config --get "branch.$local_branch.merge" | sed 's#^refs/heads/##')
-
    git push \
         --receive-pack='gerrit receive-pack' \
         --no-follow-tags \
-        "$remote_name" \
-        "refs/heads/$local_branch:refs/for/$dest_branch"
+        "$confirmed_remote_name" \
+        "refs/heads/$local_branch:refs/for/$confirmed_dest_branch"
    ```
-5. 只有 `git push` 返回成功才报告补丁已提交到 Gerrit 审核。最终报告包含 Redmine 问题号、提交 SHA、是否 amend、提交消息摘要、实际 `remote_name`、`local_branch`、`dest_branch` 和 Gerrit 审核 ref；推送失败时原样总结错误和下一步，不声称补丁已进入审核。
+   5. 只有 `git push` 返回成功才报告补丁已提交到 Gerrit 审核。最终报告包含 Redmine 问题号、提交 SHA、是否 amend、提交消息摘要、阶段零已确认的 `confirmed_remote_name`、`local_branch`、`confirmed_dest_branch` 和 Gerrit 审核 ref；推送失败时原样总结错误和下一步，不声称补丁已进入审核。
    - 单独报告“干净版本打补丁后的完整功能测试”和提交者自 Review+1 的状态；如果尚未完成或用户没有提供证据，标记为“待完成/未知”，不得写成通过。
 
 ## 停止条件
