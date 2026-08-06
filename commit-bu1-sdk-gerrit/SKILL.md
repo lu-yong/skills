@@ -72,8 +72,8 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
    - `git status --short`
    - `git branch --show-current`
    - 当前分支的 remote、merge 配置和 push URL。
-   默认范围要列出所有会被提交的路径，包括删除、修改、新增和已暂存路径。对未跟踪文件读取必要内容以便检查是否是敏感文件、生成物或与问题无关的内容；不要把文件内容或凭据输出给用户。
-4. 以 `HEAD` 为基线检查完整变更：已暂存和未暂存变更使用 `git diff --binary HEAD`；未跟踪文件单独检查。记录用于后续复核的工作区快照（状态、变更内容摘要和未跟踪文件 hash）。如果用户明确指定了范围：
+   默认范围要列出所有会被提交的路径，包括删除、修改、新增和已暂存路径。对未跟踪文件读取必要内容以便检查是否是敏感文件、生成物或与问题无关的内容；不要把文件内容或凭据输出给用户。状态收集结果按「工作区快照固定格式」记录固定字段。
+4. 以 `HEAD` 为基线检查完整变更：已暂存和未暂存变更使用 `git diff --binary HEAD`；未跟踪文件单独检查。按「工作区快照固定格式」生成并记录完整快照；快照只记录路径、类型、大小和 hash，不记录文件内容或凭据。如果用户明确指定了范围：
    - 先使用 NUL-safe 的 `git diff --cached --name-only -z` 读取调用 skill 前已经存在的 index 路径，并按完整路径集合与 `confirmed-paths` 比较；覆盖修改、新增、删除、重命名和带空格的路径。
    - 任何已有 staged 路径不属于确认范围时，立即停止，展示路径、当前范围和阻塞原因，要求用户明确扩大范围或自行处理；不要执行 `git restore --staged`，不要静默改变用户 index。
    - 没有范围外路径时，确认指定范围内每个路径都存在于快照中，并把范围、已有 staged 路径和本次待加入路径分别记录在草稿中。
@@ -102,15 +102,54 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
    - Git 仓库、当前工作分支、目标分支、push remote 和推送范围。
    - 变更文件清单及简短的事实性摘要。
    - 本地规则快照的来源页面、版本、`checked_at`、`checked_by`，以及是否使用了过期快照。
+   - 固定字段快照摘要（`HEAD`、工作区与已暂存 diff hash、未跟踪文件 hash、分支/merge/remote/push URL/目标 branch、`commit-msg` hook 路径和 hash；不含文件内容、hook 内容和凭据）。
    - Gerrit 规则要求和仍待用户回答的问题（有任何一项就不要进入确认阶段）。
    - 完整的 commit message 草稿。
    - 明确声明：尚未执行本次流程的 `git add`、`git commit` 或 `git push`；已经存在的用户暂存状态如有则如实说明。
    - 请求明确回复 `确认提交`。仅“好的”“看起来可以”或未回答所有问题不算确认。
 
+## 工作区快照固定格式
+
+阶段一生成一次固定字段快照并记录在草稿中；阶段二在 `git add` 前按同一格式重新生成，逐字段比较。任一字段变化都使阶段一的确认失效，回到重新生成草稿并再次请求确认。
+
+固定字段与生成方式：
+
+| 字段 | 生成方式 |
+| --- | --- |
+| `HEAD` SHA | `git rev-parse HEAD` 的完整 40 位 SHA |
+| 工作区变更 hash | `git diff --binary HEAD` 输出的 SHA-256 |
+| 已暂存变更 hash | `git diff --cached --binary` 输出的 SHA-256 |
+| 未跟踪文件 hash | `git ls-files --others --exclude-standard -z` 列出的每个路径，按 `路径|类型|大小|内容SHA-256` 记录一行，按路径排序后整体再取一次 SHA-256 |
+| 当前分支 | `git branch --show-current` |
+| merge 配置 | `git config --get branch.<local_branch>.merge` 规范化后的值 |
+| remote 名称 | `git config --get branch.<local_branch>.remote` |
+| push URL | 阶段零确认的唯一 `pushurl`（无 `pushurl` 时用唯一 `url`） |
+| 目标 branch | `branch.<local_branch>.merge` 去掉 `refs/heads/` 前缀后的值 |
+| hook 路径 | `git rev-parse --git-path hooks/commit-msg`（使用 `core.hooksPath` 时以 Git 解析结果为准） |
+| hook hash | `commit-msg` hook 文件的 SHA-256 |
+
+生成示例（SHA-256 命令 macOS 用 `shasum -a 256`，Linux 用 `sha256sum`）：
+
+```bash
+git rev-parse HEAD
+git diff --binary HEAD | shasum -a 256
+git diff --cached --binary | shasum -a 256
+git ls-files --others --exclude-standard -z | while IFS= read -r -d '' f; do
+  [ -L "$f" ] && t=symlink || t=file
+  printf '%s|%s|%s|%s\n' "$f" "$t" "$(wc -c < "$f" | tr -d ' ')" "$(shasum -a 256 "$f" | cut -d' ' -f1)"
+done | sort | shasum -a 256
+```
+
+规则：
+
+- 快照只记录路径、类型、大小和 hash，不记录也不输出未跟踪文件内容、diff 内容、hook 内容、凭据或任何秘密；文件名不变但内容、`HEAD`、remote、hook 或未跟踪文件变化时，对应 hash 或字段值会不同，必须能被发现。
+- 未跟踪文件逐行记录 `路径|类型|大小|内容SHA-256`，按路径排序保证可比较；类型只用 `file`/`symlink`，大小为字节数。
+- 阶段二在 `git add` 前重新生成全部字段并与阶段一逐项比较：任一字段缺失、无法生成或值不同，立即停止，重新执行阶段一生成新草稿，并再次请求明确确认；字段全部一致才允许继续 `git add`。
+
 ## 阶段二：用户确认后暂存
 
 1. 只接受针对阶段一完整草稿的明确确认。若用户修改问题号、范围、消息或任何规则相关内容，重新执行受影响的检查并展示新草稿。
-2. 在执行 `git add` 前重新收集工作区快照并与阶段一比较。只要范围、文件状态或内容发生变化，就停止并重新生成草稿；不要把确认后新产生的修改静默纳入提交。
+2. 在执行 `git add` 前按「工作区快照固定格式」重新生成全部快照字段，并与阶段一记录逐字段比较。任一字段变化（`HEAD`、工作区或已暂存 diff hash、未跟踪文件、分支、merge 配置、remote 名称、push URL、目标 branch、`commit-msg` hook 路径或 hash）都使阶段一确认失效：停止，重新执行阶段一生成新草稿并再次请求明确确认；不要把确认后新产生的修改静默纳入提交。
 3. 确认快照未变化后才执行 `git add`：
    - 默认范围：在仓库根目录执行 `git add -A -- .`。
    - 用户指定范围：仅对确认过的路径执行 `git add -A -- <confirmed-paths>`，正确处理删除和带空格的路径。
@@ -139,4 +178,4 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
 
 ## 停止条件
 
-遇到凭据不可用、Redmine 问题号不存在、Redmine 项目标识缺失或不是 `bu1-sdk`、本地规则快照缺失或元数据无效、快照过期且用户未明确接受旧快照、刷新事务正在进行、规则冲突、阶段零本地工作分支硬门槛失败、提交者角色无法确认、分支/remote/目标分支无法确认、工作区在确认后变化、用户指定范围包含已有范围外 staged 路径、git add 后或 commit 前 staged 路径超出确认范围、范围包含未经确认的敏感或无关文件、commit-msg hook 缺失、消息不符合规则、Change-Id 缺失、commit 失败或 push 失败，都必须停在当前阶段并向用户说明具体原因。业务流程不得通过网络补齐规则，也不得自行改写 reference、取消用户已有暂存或扩大提交范围。阶段零失败时不得继续读取 Redmine、分析 Git 修改或生成 commit 草稿；用户创建并切换本地工作分支后重新调用 skill。提交前自测由用户保证，不因缺少测试证据停止。任何不确定的规则或事实都先询问用户，不能用经验值补齐。
+遇到凭据不可用、Redmine 问题号不存在、Redmine 项目标识缺失或不是 `bu1-sdk`、本地规则快照缺失或元数据无效、快照过期且用户未明确接受旧快照、刷新事务正在进行、规则冲突、阶段零本地工作分支硬门槛失败、提交者角色无法确认、分支/remote/目标分支无法确认、工作区快照任一固定字段在确认后变化、用户指定范围包含已有范围外 staged 路径、git add 后或 commit 前 staged 路径超出确认范围、范围包含未经确认的敏感或无关文件、commit-msg hook 缺失、消息不符合规则、Change-Id 缺失、commit 失败或 push 失败，都必须停在当前阶段并向用户说明具体原因。业务流程不得通过网络补齐规则，也不得自行改写 reference、取消用户已有暂存或扩大提交范围。阶段零失败时不得继续读取 Redmine、分析 Git 修改或生成 commit 草稿；用户创建并切换本地工作分支后重新调用 skill。提交前自测由用户保证，不因缺少测试证据停止。任何不确定的规则或事实都先询问用户，不能用经验值补齐。
