@@ -24,11 +24,20 @@ Load and follow the available **Redmine** skill for authentication, issue API us
    - Inspect the commit diff and changed-file summary (`git show`/equivalent). Summarize only behavior supported by the diff; distinguish facts from inferences.
    - If there is no repository, no commit, or the worktree is not the repository relevant to the issue, ask the user to switch to the correct repository or provide the repository context.
 
-5. **Resolve the Gerrit change through the Gerrit skill.**
+5. **Resolve the Gerrit change through the Gerrit skill, deterministically.**
    - Determine the Gerrit instance from the Git remote. Use the internal instance for `git.nationalchip.com` and the external instance for `gerrit.nationalchip.com`; ask the user to choose when the host is ambiguous.
-   - Use the latest commit SHA to query the selected Gerrit instance for the matching change. When available, use the commit's `Change-Id` footer as a second identity check. Obtain the numeric Gerrit change number (`_number`) and fetch its detail. Use the current revision or the exact matching revision as appropriate.
-   - Inspect changed files and the patch needed to report the change accurately. Do not inspect or infer testing, review, or dependency completion from Gerrit labels, branch state, or other repository evidence. Respect the Gerrit skill's XSSI parsing, authentication, TLS, and secret-handling rules.
-   - If no matching change can be found, or multiple changes cannot be disambiguated, ask the user for the Gerrit instance/change identity. Do not fabricate a change number.
+   - Query candidates by the full 40-character local commit SHA with `GET /changes/?q=commit:<sha>` using the Gerrit skill's query contract. Fetch every page (`n=` page size, `start=` offset from 0, stop only when a returned page is shorter than `n`); never claim the candidate list is complete while pagination is not exhausted. Remove the XSSI guard before parsing each page and follow the Gerrit skill's authentication, TLS, and secret-handling rules.
+   - Fetch `GET /changes/{change-id}/detail` for every candidate and record `_number`, `change_id`, `project`, `branch`, `status`, `current_revision`, and the `revisions` map whose keys are revision SHAs.
+   - Apply the disambiguation layers in order and keep only candidates that pass every layer:
+     1. Change-Id: when the local commit message contains a `Change-Id: I<40 hex>` footer, the candidate's `change_id` must equal it;
+     2. Project: the candidate's `project` must equal the local repository's Gerrit project, derived from the remote URL path or confirmed with the user;
+     3. Target branch: the candidate's `branch` must equal the confirmed target branch (`branch.<local_branch>.merge` with the `refs/heads/` prefix removed, or the branch confirmed with the user);
+     4. Revision: prefer candidates whose `revisions` contain a key exactly equal to the local commit SHA; a candidate without an exact revision match is kept only when no candidate has one.
+   - After all layers: exactly one candidate means the change is uniquely identified and the flow continues; zero candidates means stop and ask the user (the commit may not be pushed, the instance may be wrong, or pagination may have been truncated); more than one candidate means stop, show every candidate's identity fields, and ask the user to choose. Never guess a change number or fabricate an identity.
+   - For multiple patchsets, prefer the revision whose SHA exactly equals the local commit SHA. When no exact revision matches (for example the change was located via `Change-Id` after a re-push), use `current_revision` and disclose that basis in the draft. Never use the local commit SHA or the `Change-Id` as the change number.
+   - Only proceed when the unique change's `status` is `NEW`. When it is `MERGED`, `ABANDONED`, or otherwise unsuitable for the current conclusion, stop and ask the user; do not report a pushed-but-unsuitable change as valid.
+   - Inspect changed files and the patch needed to report the change accurately. Do not inspect or infer testing, review, or dependency completion from Gerrit labels, branch state, or other repository evidence.
+   - Record the change number (`_number`), revision SHA, branch, project, status, and the matching basis (which fields matched at each layer); show them in the draft and in the final report.
 
 6. **Draft the conclusion.** Analyze the issue context, exact tracker, local commit, Gerrit metadata, current conclusion, and cached rules. The conclusion must contain these three elements with concrete content:
    - `问题原因：` why the issue occurred, supported by the issue and commit analysis;
@@ -53,7 +62,7 @@ Load and follow the available **Redmine** skill for authentication, issue API us
 
    Use concrete evidence and preserve uncertainty in the wording when the scope or cause is not established. The conclusion remains concise and in Chinese.
 
-7. **Present the draft and wait.** Show the target issue/project, exact tracker, local rule source, `source_version`, `checked_at`, and `checked_by`, latest Git commit SHA, Gerrit instance/change number, evidence-based change summary, current conclusion, and proposed conclusion in a fenced text block. State that no Redmine write has happened. Ask for explicit confirmation such as `确认更新`; a request for edits starts a revised draft and requires confirmation again.
+7. **Present the draft and wait.** Show the target issue/project, exact tracker, local rule source, `source_version`, `checked_at`, and `checked_by`, latest Git commit SHA, Gerrit instance, change number, revision SHA, branch, project, status, and matching basis, evidence-based change summary, current conclusion, and proposed conclusion in a fenced text block. State that no Redmine write has happened. Ask for explicit confirmation such as `确认更新`; a request for edits starts a revised draft and requires confirmation again.
 
 Phase 1 is complete only when the issue is verified as `bu1-sdk`, the `结论` field is identified, the available Git/Gerrit evidence is summarized, and the complete proposed conclusion has been shown.
 
@@ -69,6 +78,6 @@ Phase 1 is complete only when the issue is verified as `bu1-sdk`, the `结论` f
 
    Do not update `status_id`, `done_ratio`, assignee, tags, target version, dates, relations, or any other custom field. Do not claim success before the request returns success.
 
-4. Re-read the issue after the PUT and verify the `结论` custom-field value. Report the issue ID, project, tracker, updated conclusion, timestamp if returned, and the Gerrit change number. Report HTTP or verification failures plainly and do not claim completion when verification fails.
+4. Re-read the issue after the PUT and verify the `结论` custom-field value. Report the issue ID, project, tracker, updated conclusion, timestamp if returned, and the Gerrit identity (change number, revision SHA, branch, project, status, and matching basis). Report HTTP or verification failures plainly and do not claim completion when verification fails.
 
 The workflow is complete after the verified Redmine issue contains the approved conclusion and the required audit note.

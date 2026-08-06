@@ -139,6 +139,20 @@ curl --digest --netrc-file "$NETRC_FILE" \
   'https://git.nationalchip.com/gerrit/a/changes/'
 ```
 
+### Search by commit SHA
+
+Search candidate changes by the full 40-character local commit SHA when the caller has a local commit that may already be pushed:
+
+```bash
+curl --digest --netrc-file "$NETRC_FILE" \
+  --fail --silent --show-error --get \
+  --data-urlencode 'q=commit:<full-sha>' \
+  --data-urlencode 'n=20' \
+  'https://git.nationalchip.com/gerrit/a/changes/'
+```
+
+`commit:` matches every change whose patchset includes that exact commit. Combine it with `project:` and `branch:` query terms when the caller knows them, and paginate with `start=<offset>` until a returned page is shorter than the page size. Do not claim the candidate list is complete when pagination is not exhausted.
+
 ### Changed files
 
 ```text
