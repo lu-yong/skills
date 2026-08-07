@@ -1,6 +1,6 @@
 ---
 name: adb
-description: Android Debug Bridge workflows for device inspection, AOSP/vendor bring-up, HAL and service debugging, log collection, file transfer, property checks, shell commands, port forwarding, app/package operations, and safe multi-device adb command execution. Use when Codex needs to run or explain adb commands, diagnose Android devices, collect logs, inspect services, test native/vendor components, or interact with connected Android hardware/emulators.
+description: Android Debug Bridge workflows for device inspection, AOSP/vendor bring-up, HAL and service debugging, log collection, file transfer, property checks, shell commands, port forwarding, app/package operations, and safe multi-device adb command execution. Use when an agent needs to run or explain adb commands, diagnose Android devices, collect logs, inspect services, test native/vendor components, or interact with connected Android hardware/emulators.
 ---
 
 # ADB
