@@ -1,6 +1,7 @@
 ---
 name: openspec-language-config
 description: Configure OpenSpec to generate proposals, specs, tasks, and other artifacts in a requested natural language by editing openspec/config.yaml context. Use when Codex needs to set, change, verify, or explain OpenSpec multi-language/language-localization settings, including Simplified Chinese, Japanese, Spanish, Portuguese, French, German, or custom terminology rules.
+disable-model-invocation: true
 ---
 
 # OpenSpec Language Config

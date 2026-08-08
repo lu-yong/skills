@@ -1,6 +1,7 @@
 ---
 name: install-openspec-superpowers-bridge
 description: Install or upgrade the OpenSpec `superpowers-bridge` schema into the current project, then optionally wire AGENTS.md routing for Codex/OpenCode-compatible agents. Use when the user wants to combine OpenSpec with Superpowers in Codex, OpenCode, or another agent CLI.
+disable-model-invocation: true
 license: MIT
 metadata:
   compatibility: "Codex, OpenCode, Claude Code-compatible skill layout"
