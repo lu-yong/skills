@@ -45,11 +45,11 @@
 对 `错误` 跟踪类型的上述问题性质，结论还必须说明补丁引入关系，并使用以下结构：
 
 ```text
-问题描述（需求规格）：可选；原任务描述清晰时可以省略。
-问题原因：由 {{patch(<Gerrit change number>)}} 修改引入。
-处理方案：
-影响范围：
-修改补丁：{{patch(<Gerrit change number>)}}
+* 问题描述（需求规格）：可选；原任务描述清晰时可以省略。
+* 问题原因：由 {{patch(<Gerrit change number>)}} 修改引入。
+* 处理方案：
+* 影响范围：
+* 修改补丁：{{patch(<Gerrit change number>)}}
 ```
 
 其中 `<Gerrit change number>` 必须使用已通过 Gerrit 查询核实的数字 change number，不使用未经核实的 Change-Id 或本地 Git SHA 代替。
