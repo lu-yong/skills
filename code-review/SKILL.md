@@ -1,89 +1,216 @@
 ---
 name: code-review
-description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/PRD asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
+description: Review committed and working-tree changes across three independent axes — Spec, Standards/Design, and Security/Reliability — with evidence-based findings and explicit test coverage. Use when the user wants to review a branch, PR, fixed point, or current changes.
 ---
 
-Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
+# Code Review
 
-- **Standards** — does the code conform to this repo's documented coding standards?
-- **Spec** — does the code faithfully implement the originating issue / PRD / spec?
+A structured, review-only code review for changes in the current repository. The review has three independent axes:
 
-Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
+- **Spec** — does the change implement the originating issue, PRD, contract, or user request?
+- **Standards / Design** — does it follow this repository's conventions and maintainable design principles?
+- **Security / Reliability** — can it fail, regress, leak data, or be exploited in production?
 
-The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if `docs/agents/issue-tracker.md` is missing.
+Keep the axes separate. A change can pass one axis and fail another. Do not let good style hide a spec failure, and do not let correct functionality hide a security or standards problem.
 
-## Process
+## Operating rules
 
-### 1. Pin the fixed point
+- This is a **review-only** workflow. Do not edit code unless the user explicitly asks to implement fixes after seeing the findings.
+- Every finding must be evidence-based. Do not report a theoretical concern as a defect without a concrete code path, triggering condition, or contract violation.
+- Prefer the smallest safe fix. Do not propose a broad rewrite for a local issue.
+- Do not invent requirements, repository conventions, consumers, or vulnerabilities.
+- If context is unavailable, say so explicitly and lower confidence rather than guessing.
 
-Whatever the user said is the fixed point — a commit SHA, branch name, tag, `main`, `HEAD~5`, etc. If they didn't specify one, ask for it.
+## 1. Establish the review scope
 
-Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
+First determine whether the user supplied a fixed point or wants the current working changes.
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
+### Fixed-point / branch / PR review
 
-### 2. Identify the spec source
+When the user supplies a commit, branch, tag, `main`, or merge-base:
 
-Look for the originating spec, in this order:
+1. Confirm it resolves: `git rev-parse <fixed-point>`.
+2. Capture the committed comparison once: `git diff <fixed-point>...HEAD` (three-dot comparison against the merge-base).
+3. Capture commits: `git log <fixed-point>..HEAD --oneline`.
+4. Separately inspect working-tree changes:
+   - `git diff` — unstaged tracked changes
+   - `git diff --cached` — staged changes
+   - `git ls-files --others --exclude-standard` — untracked files
+5. State whether working-tree changes are included in the review. Include them when the user asks for current changes; otherwise report them as out of scope.
 
-1. Issue references in the commit messages (`#123`, `Closes #45`, GitLab `!67`, etc.) — fetch via the workflow in `docs/agents/issue-tracker.md`.
-2. A path the user passed as an argument.
-3. A PRD/spec file under `docs/`, `specs/`, or `.scratch/` matching the branch name or feature.
-4. If nothing is found, ask the user where the spec is. If they say there isn't one, the **Spec** sub-agent will skip and report "no spec available".
+### Current-working-tree review
 
-### 3. Identify the standards sources
+If no fixed point was supplied, review all current changes without requiring another question:
 
-Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`.
+- `git status -sb`
+- `git diff HEAD --stat`
+- `git diff HEAD` — tracked changes, staged and unstaged
+- `git ls-files --others --exclude-standard` and read relevant untracked files
 
-On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
+If there are no committed, staged, unstaged, or untracked changes, report that the review has no input. Ask whether the user wants a specific commit or range reviewed.
 
-- **The repo overrides.** A documented repo standard always wins; where it endorses something the baseline would flag, suppress the smell.
-- **Always a judgement call.** Each smell is a labelled heuristic ("possible Feature Envy"), never a hard violation — and, like any standard here, skip anything tooling already enforces.
+### Preflight rules
 
-Each smell reads *what it is* → *how to fix*; match it against the diff:
+- A bad fixed point is a blocking preflight error; do not delegate it to a reviewer.
+- Do not silently review only unstaged changes when staged or committed changes are in scope.
+- For a large diff (roughly more than 500 changed lines), summarize by file first and review in logical feature/module batches.
+- Note generated files, vendored code, migrations, and lockfiles separately. Do not spend review effort on generated output unless it changes runtime behavior or the user asks for it.
+- Identify entry points, ownership boundaries, and critical paths such as authentication, authorization, payments, data writes, file handling, and network calls.
 
-- **Mysterious Name** — a function, variable, or type whose name doesn't reveal what it does or holds. → rename it; if no honest name comes, the design's murky.
-- **Duplicated Code** — the same logic shape appears in more than one hunk or file in the change. → extract the shared shape, call it from both.
-- **Feature Envy** — a method that reaches into another object's data more than its own. → move the method onto the data it envies.
-- **Data Clumps** — the same few fields or params keep travelling together (a type wanting to be born). → bundle them into one type, pass that.
-- **Primitive Obsession** — a primitive or string standing in for a domain concept that deserves its own type. → give the concept its own small type.
-- **Repeated Switches** — the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
-- **Shotgun Surgery** — one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
-- **Divergent Change** — one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
-- **Speculative Generality** — abstraction, parameters, or hooks added for needs the spec doesn't have. → delete it; inline back until a real need shows.
-- **Message Chains** — long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
-- **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
-- **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
+## 2. Locate context
 
-### 4. Spawn both sub-agents in parallel
+### Spec source
 
-Send a single message with two `Agent` tool calls. Use the `general-purpose` subagent for both.
+Find the originating requirements in this order:
 
-**Standards sub-agent prompt** — include:
+1. Issue or PR references in commit messages (`#123`, `Closes #45`, `!67`, etc.). Use the repository's issue-tracker workflow if one is available.
+2. A path or URL supplied by the user.
+3. A matching document under `docs/`, `specs/`, `.scratch/`, or the repository's planning directory.
+4. The user's request and commit messages, only when they contain concrete requirements.
 
-- The full diff command and commit list.
-- The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
-- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
+An issue-tracker integration is optional. If its documentation or credentials are unavailable, do not block the review: report that the external issue could not be fetched. If no usable spec exists, skip the Spec axis and say **no spec available**; do not infer a spec from the implementation.
 
-**Spec sub-agent prompt** — include:
+### Standards and repository guidance
 
-- The diff command and commit list.
-- The path or fetched contents of the spec.
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+Look for applicable instructions and standards, including:
 
-If the spec is missing, skip the Spec sub-agent and note this in the final report.
+- `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`
+- `CODING_STANDARDS.md`, style guides, architecture documents
+- package/module-level README files
+- test, migration, API, and security conventions
 
-### 5. Aggregate
+A documented repository rule overrides a generic design heuristic. Tool-enforced rules should not be reported as review findings unless the change bypasses or weakens the enforcement.
 
-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
+## 3. Review in independent lanes
 
-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes — that's the reranking the separation exists to prevent.
+Run the three lanes in parallel when the environment supports isolated sub-agents. Give each reviewer the exact scope, commit list, relevant context, and the common finding contract below. If parallel sub-agents are unavailable, run the lanes sequentially with separate prompts and preserve the same boundaries.
 
-## Why two axes
+### Spec lane
 
-A change can pass one axis and fail the other:
+Report:
 
-- Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
-- Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
+- requirements that are missing, partial, or implemented incorrectly;
+- behavior added without support from the spec (scope creep);
+- compatibility, API, data, or migration behavior that contradicts the contract.
 
-Reporting them separately stops one axis from masking the other.
+Quote the relevant spec or user-request line for each finding. If no spec is available, return only that fact.
+
+### Standards / Design lane
+
+Check repository standards first. Then use these as judgement-based heuristics:
+
+- SRP, OCP, LSP, ISP, and DIP violations;
+- duplicated code, mysterious names, long methods, feature envy, data clumps, primitive obsession;
+- repeated conditionals, shotgun surgery, divergent change, speculative generality;
+- message chains, middle men, refused bequests, needless inheritance, and inappropriate coupling.
+
+A smell is not automatically a violation. Explain the design consequence and propose a minimal improvement. Do not elevate a style or design smell to P1 without a demonstrated correctness, security, or material performance impact.
+
+### Security / Reliability lane
+
+Inspect changed code and its relevant callers, boundaries, and contracts for:
+
+- XSS, SQL/NoSQL/command/GraphQL injection, SSRF, path traversal, and unsafe deserialization;
+- missing authentication, authorization, tenant/ownership checks, IDOR, trust in client-controlled roles or IDs;
+- secret or PII leakage, insecure defaults, weak crypto, JWT validation errors, permissive CORS or missing security headers;
+- race conditions, check-then-act / TOCTOU, non-atomic updates, missing transactions, idempotency, or distributed locking;
+- missing timeouts, retries, rate limits, resource limits, or unbounded loops/buffers;
+- swallowed or leaked errors, unhandled async failures, partial writes, silent fallback, and missing observability;
+- N+1 queries, unbounded reads, blocking hot paths, cache invalidation/key/tenancy mistakes;
+- null and empty-collection handling, numeric/string/Unicode boundaries, pagination, and off-by-one behavior.
+
+Only report a security or reliability issue when the changed code creates a plausible path to impact. State both exploitability or trigger conditions and impact.
+
+### Optional removal / iteration check
+
+Treat removal candidates as optional, non-blocking review suggestions unless there is strong evidence. Before suggesting deletion, check repository references, dynamic/reflection use, scripts, configuration, documentation, tests, external consumers, and feature-flag telemetry where applicable. Distinguish **safe to remove now** from **defer with a migration and rollback plan**.
+
+## 4. Finding contract
+
+Every finding must use this information, in this order:
+
+- **Severity**: P0, P1, P2, or P3
+- **Confidence**: High, Medium, or Low
+- **Location**: `path/to/file:line` or the smallest relevant hunk
+- **Evidence**: the specific changed code, contract, or standards rule
+- **Impact**: what can go wrong and who/what is affected
+- **Trigger**: input, state, request sequence, or usage required
+- **Suggested fix**: the smallest reasonable correction
+- **Verification**: test, command, metric, or review needed to validate it
+
+Severity guidance:
+
+- **P0 Critical** — exploitable security issue, data loss/corruption, or a release-blocking correctness failure.
+- **P1 High** — reproducible logic error, broken contract, serious authorization/reliability issue, or material performance regression; should be fixed before merge.
+- **P2 Medium** — maintainability/design problem, likely edge case, moderate reliability concern, or removal candidate needing follow-up.
+- **P3 Low** — non-blocking naming, clarity, style, or minor improvement.
+
+A generic smell, possible optimization, or unverified hypothesis is normally P2/P3 or omitted. Do not use severity as a substitute for evidence.
+
+## 5. Verification before reporting
+
+Before aggregating:
+
+- Re-read the relevant hunk and enough surrounding code to confirm the finding.
+- Search callers, tests, types, configuration, and related modules when the finding depends on them.
+- Inspect existing tests and changed tests. Run focused, non-destructive tests or static checks when practical; do not claim tests passed if they were not run.
+- For security findings, distinguish confirmed behavior from a code-path concern and state what was or was not verified.
+- Check that the suggested fix does not violate the spec or repository standards.
+
+## 6. Output format
+
+Use this structure:
+
+```markdown
+## Code Review Summary
+
+**Scope**: [base/range or working-tree scope]
+**Files reviewed**: X files, Y lines changed
+**Tests/checks run**: [commands, or "none"]
+**Overall assessment**: [APPROVE / REQUEST_CHANGES / COMMENT]
+
+---
+
+## Spec
+
+### P0 - Critical
+(none or findings)
+
+### P1 - High
+(none or findings)
+
+### P2 - Medium
+(none or findings)
+
+### P3 - Low
+(none or findings)
+
+## Standards / Design
+(same severity sections)
+
+## Security / Reliability
+(same severity sections)
+
+---
+
+## Residual Risks and Coverage Gaps
+- [what was not verified, such as external issue tracker, deployment config, migrations, or load behavior]
+
+## Optional Removal / Iteration Plan
+(only when supported by evidence)
+
+---
+
+## Next Steps
+
+I found X issues (P0: _, P1: _, P2: _, P3: _).
+
+1. **Fix all**
+2. **Fix P0/P1 only**
+3. **Fix specific findings**
+4. **No changes — review complete**
+```
+
+Keep the three axes separate. Report counts per axis when useful, and do not choose a single "worst" issue across different axes. A clean review must explicitly state what was checked, what was not covered, and which follow-up tests or residual risks remain.
+
+Inline comments may use the host platform's format. Always include a portable `path:line` location and the finding contract above as well.
