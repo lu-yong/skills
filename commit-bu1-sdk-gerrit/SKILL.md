@@ -6,25 +6,25 @@ disable-model-invocation: true
 
 # Commit BU1-SDK Gerrit
 
-这是一个有副作用的用户主动调用 skill。它只用于向公司 Gerrit 创建审核补丁；不要因为普通的 commit、push 或 Gerrit 查询请求自动调用它。先完成检查和草稿，再按用户确认逐步执行。
+This is a side-effectful skill that the user must invoke explicitly. It exists only to create review patches on the company Gerrit; do not invoke it automatically for ordinary commit, push, or Gerrit query requests. Complete the checks and draft first, then proceed step by step only after user confirmation.
 
-## 不可变前置条件
+## Immutable Preconditions
 
-- 必须要求用户提供一个 Redmine 问题号。只接受匹配 `^[1-9][0-9]*$` 的单个正整数；拒绝 URL、`#123`、范围、逗号分隔值、带前后其他文字的值和非十进制 ID。
-- 使用可用的 **Redmine** skill 读取 `https://git.nationalchip.com/redmine/issues/<id>.json`，确认该问题存在、当前凭据可访问，并且 `issue.project.identifier` 精确等于 `bu1-sdk`；项目标识缺失或不匹配时停止。记录问题号、项目标识、标题、跟踪类型和状态；无法访问或问题不存在时停止并询问用户。
-- 业务规则唯一来自本 skill 的本地快照 [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md)，在生成草稿前完整阅读。运行过程中不访问在线 Wiki，不刷新在线规则，也不写入或静默修改任何 reference 文件。
-- 规则快照的在线来源和版本元数据保留在 reference 中；需要检查或更新快照时，停止当前业务流程并请用户单独调用 [refresh-bu1-sdk-rules](../refresh-bu1-sdk-rules/SKILL.md)。刷新 skill 的结果不会由本 skill 自动接受或覆盖。
-- 开始规则检查时确认 reference 存在、可读，并按 reference 的来源与快照元数据 节校验元数据（`source_version`、`source_updated_on`、`checked_at`、`checked_by` 存在，`checked_at` 为可解析 UTC ISO 8601；30 天期限只按该节规则以 `checked_at` 计算）。缺失、无效或过期时停止，要求先维护快照；只有用户明确回复本次使用旧快照才可继续，并在草稿和最终报告中披露“使用已过期本地快照”。
-- 如果存在刷新事务标记 `refresh-bu1-sdk-rules/.refresh.pending`，停止并等待刷新事务完成或回滚；不读取在线内容、不自行修复标记。
-- 当前 Git 仓库的修改内容默认为本次提交内容，包括已暂存、未暂存和未被忽略的未跟踪文件。只有用户明确指定文件、路径、补丁或范围时，才使用指定范围。
-- 本地工作分支必须先通过“阶段零：本地工作分支硬门槛”：不能是 detached HEAD、`main`、`master`、`develop`、`sdk-release` 或与 Gerrit 目标分支同名，且必须配置有效目标分支。检查失败时立即结束 skill，要求用户创建并切换本地工作分支后重新调用。
-- 推送前必须确认当前分支配置了非空的 `branch.<local_branch>.merge`，并且该目标分支已在推送远端创建。缺少配置或远端分支检查失败时停止，不自行创建、改名或猜测目标分支。
-- Gerrit 提交必须由仓库的 `commit-msg` hook 生成合法 `Change-Id`。找不到可执行 hook、hook 执行失败或最终提交缺少合法 `Change-Id: I<40位十六进制字符>` footer 时停止，不手工伪造 Change-Id。
-- 不显示或写入 Redmine API key、Gerrit 密码、netrc 内容、Authorization header 或其他凭据。
+- Require the user to provide one Redmine issue number. Accept only a single positive integer matching `^[1-9][0-9]*$`; reject URLs, `#123`, ranges, comma-separated values, values with surrounding text, and non-decimal IDs.
+- Use the available **Redmine** skill to read `https://git.nationalchip.com/redmine/issues/<id>.json`, confirm the issue exists, is accessible with the current credentials, and its `issue.project.identifier` is exactly `bu1-sdk`; stop when the project identifier is missing or mismatched. Record the issue number, project identifier, title, tracker, and status; stop and ask the user when the issue is inaccessible or does not exist.
+- Business rules come solely from this skill's local snapshot [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md); read it fully before drafting. Do not access the online Wiki, refresh online rules, or write or silently modify any reference file during the run.
+- The snapshot's online sources and version metadata live in the reference; when the snapshot must be checked or updated, stop the current flow and ask the user to invoke [refresh-bu1-sdk-rules](../refresh-bu1-sdk-rules/SKILL.md) separately. This skill never auto-accepts or overrides the refresh skill's results.
+- Before rule checks, confirm the reference exists and is readable, and validate its metadata per the 来源与快照元数据 section of the reference (`source_version`, `source_updated_on`, `checked_at`, `checked_by` present; `checked_at` a parseable UTC ISO 8601 timestamp; the 30-day limit is computed only from `checked_at` per that section). Stop when any metadata is missing, invalid, or expired and require the snapshot to be maintained first; continue only when the user explicitly accepts the old snapshot for this run, and disclose “using an expired local snapshot” in the draft and final report.
+- When the refresh transaction marker `refresh-bu1-sdk-rules/.refresh.pending` exists, stop and wait for the refresh transaction to finish or roll back; do not read online content or repair the marker yourself.
+- The current Git repository's changes are the default commit scope, including staged, unstaged, and unignored untracked files. Use an explicit scope only when the user specifies files, paths, patches, or a range.
+- The local work branch must first pass the “Phase 0: local work-branch hard gate”: it must not be detached HEAD, `main`, `master`, `develop`, `sdk-release`, or share the name of the Gerrit target branch, and it must have a valid configured target branch. End the skill immediately on failure and ask the user to create and switch to a local work branch before invoking again.
+- Before pushing, confirm the current branch has a non-empty `branch.<local_branch>.merge` and that the target branch exists on the push remote. Stop when the config is missing or the remote-branch check fails; never create, rename, or guess the target branch.
+- Gerrit commits must carry a valid `Change-Id` generated by the repository's `commit-msg` hook. Stop when the hook is not executable, the hook fails, or the final commit lacks a valid `Change-Id: I<40 hex characters>` footer; never fabricate a Change-Id by hand.
+- Never display or write the Redmine API key, Gerrit password, netrc contents, Authorization header, or other credentials.
 
-## 阶段零：本地工作分支硬门槛
+## Phase 0: Local Work-Branch Hard Gate
 
-这是本 skill 的第一步，必须先于 Redmine 校验、变更分析和草稿生成执行。运行：
+This is the first step of the skill and must run before Redmine validation, change analysis, and draft generation. Run:
 
 ```bash
 local_branch=$(git branch --show-current)
@@ -60,69 +60,69 @@ confirmed_dest_branch="$dest_branch"
 printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和目标 branch。这些硬检查只在阶段零执行，是唯一权威首次执行点；后续阶段不重新执行这些检查，只复核快照一致性，并只能使用这些已确认值。'
 ```
 
-以上任一检查失败时，立即结束本次 skill 调用，不读取 Redmine、不分析 Git 修改、不生成 commit 草稿，也不执行任何 `git add`、`git commit` 或 `git push`。不要自动创建、切换、改名或修复分支。用户需要先完成本地工作分支创建/切换及目标分支配置，再重新调用 skill。
+When any check above fails, end this skill invocation immediately: do not read Redmine, analyze Git changes, generate a commit draft, or run any `git add`, `git commit`, or `git push`. Do not auto-create, switch, rename, or repair branches. The user must create/switch to a local work branch and configure the target branch, then invoke the skill again.
 
-## 阶段一：检查并生成草稿
+## Phase 1: Inspect and Draft
 
-1. 先验证 Redmine 问题号并读取问题详情。问题号合法只表示格式正确；只有 API 成功返回问题详情且 `issue.project.identifier` 精确等于 `bu1-sdk` 才算“合法问题号”。项目标识缺失或不匹配时停止，不生成草稿。commit message 中使用的 Redmine ID 就是该已验证的问题号，不另行要求 Unify 关联。
-2. 在继续规则分析前读取本地 reference，并按 不可变前置条件 的快照规则校验元数据、时效和刷新事务标记。
-3. 解析仓库根目录并收集当前状态：
+1. First validate the Redmine issue number and read the issue details. A syntactically valid number only means well-formed; the number counts as a “valid issue number” only when the API returns the issue details and `issue.project.identifier` is exactly `bu1-sdk`. Stop and do not draft when the project identifier is missing or mismatched. The Redmine ID used in the commit message is that validated issue number; no separate Unify association is required.
+2. Read the local reference before continuing rule analysis, and validate metadata, freshness, and the refresh transaction marker per the snapshot rules in Immutable Preconditions.
+3. Resolve the repository root and collect the current state:
    - `git rev-parse --show-toplevel`
    - `git status --short`
    - `git branch --show-current`
-   - 当前分支的 remote、merge 配置和 push URL。
-   默认范围要列出所有会被提交的路径，包括删除、修改、新增和已暂存路径。对未跟踪文件读取必要内容以便检查是否是敏感文件、生成物或与问题无关的内容；不要把文件内容或凭据输出给用户。状态收集结果按「工作区快照固定格式」记录固定字段。
-4. 以 `HEAD` 为基线检查完整变更：已暂存和未暂存变更使用 `git diff --binary HEAD`；未跟踪文件单独检查。按「工作区快照固定格式」生成并记录完整快照；快照只记录路径、类型、大小和 hash，不记录文件内容或凭据。如果用户明确指定了范围：
-   - 先使用 NUL-safe 的 `git diff --cached --name-only -z` 读取调用 skill 前已经存在的 index 路径，并按完整路径集合与 `confirmed-paths` 比较；覆盖修改、新增、删除、重命名和带空格的路径。
-   - 任何已有 staged 路径不属于确认范围时，立即停止，展示路径、当前范围和阻塞原因，要求用户明确扩大范围或自行处理；不要执行 `git restore --staged`，不要静默改变用户 index。
-   - 没有范围外路径时，确认指定范围内每个路径都存在于快照中，并把范围、已有 staged 路径和本次待加入路径分别记录在草稿中。
-5. 复核阶段零固定的工作分支目标（只做快照一致性复核，不重新执行阶段零的硬检查）：
-   - 重新读取当前分支 `branch.<local_branch>.remote` 的当前原始值、该 remote 的全部 `pushurl`（没有 `pushurl` 时用全部 `url`）、解析出的 host 和 `branch.<local_branch>.merge` 的当前原始值。
-   - 将这些当前值与阶段零保存的 `confirmed_remote_name`、`confirmed_push_url`、`confirmed_remote_host`、`confirmed_dest_branch` 逐项比较。
-   - 任一值变化、缺失或与已确认值不一致（包括出现新的多个候选）时，停止并重新生成草稿；不得重新选择另一个 remote，也不重新执行阶段零的 host 白名单或 `ls-remote` 检查（它们是阶段零的唯一职责）。
-   - 草稿展示 remote 名称、push URL（按秘密处理规则脱敏）、host、目标 branch 和一致性校验结果。
-6. 检查仓库 hooks 路径：
+   - the current branch's remote, merge config, and push URL.
+   The default scope must list every path that would be committed, including deleted, modified, added, and staged paths. For untracked files, read only what is necessary to check whether they are sensitive files, build artifacts, or unrelated content; do not output file contents or credentials to the user. Record the fixed fields of the state collection per the Fixed Workspace Snapshot Format.
+4. Inspect the full change against the `HEAD` baseline: use `git diff --binary HEAD` for staged and unstaged changes; check untracked files separately. Generate and record the complete snapshot per the Fixed Workspace Snapshot Format; the snapshot records only paths, types, sizes, and hashes, never file contents or credentials. When the user explicitly specified a scope:
+   - First read the index paths that existed before the skill was invoked with NUL-safe `git diff --cached --name-only -z` and compare the complete path set against `confirmed-paths`; cover modified, added, deleted, renamed, and space-containing paths.
+   - When any pre-existing staged path is outside the confirmed scope, stop immediately, show the path, current scope, and blocking reason, and ask the user to explicitly widen the scope or handle it themselves; do not run `git restore --staged` and never silently alter the user's index.
+   - When no out-of-scope paths exist, confirm every in-scope path is present in the snapshot, and record the scope, the pre-existing staged paths, and the paths to be added separately in the draft.
+5. Re-check the work-branch targets fixed in Phase 0 (snapshot-consistency re-check only; do not re-run Phase 0's hard checks):
+   - Re-read the current raw value of `branch.<local_branch>.remote`, all `pushurl` values of that remote (all `url` values when no `pushurl` exists), the parsed host, and the current raw value of `branch.<local_branch>.merge`.
+   - Compare these current values field by field against the `confirmed_remote_name`, `confirmed_push_url`, `confirmed_remote_host`, and `confirmed_dest_branch` saved in Phase 0.
+   - When any value changed, is missing, or differs from the confirmed value (including newly appearing multiple candidates), stop and regenerate the draft; do not pick another remote and do not re-run Phase 0's host allowlist or `ls-remote` checks (they are Phase 0's sole responsibility).
+   - The draft shows the remote name, push URL (redacted per the secret-handling rules), host, target branch, and the consistency-check result.
+6. Check the repository hooks path:
    ```bash
    commit_msg_hook=$(git rev-parse --git-path hooks/commit-msg)
    test -x "$commit_msg_hook" || { printf '%s\n' '缺少可执行 commit-msg hook' >&2; exit 1; }
    ```
-   如果仓库使用 `core.hooksPath`，以 Git 解析出的路径为准。
-7. 完整读取并应用 [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md)，按 补丁提交格式 节校验 `Type: [Redmine ID]: [Subject]` 结构、Type 枚举、Subject（不超过 50 字符、简体中文祈使、专有名词英文例外、无句号）、Body（每行 72 字符）、Footer 与 `Change-Id` 规则；Type 无法唯一确定时列出候选并询问用户。草稿标注使用的 `source_version`、`checked_at` 和 `checked_by`。
-   - 完整 commit message 只能写入已确认事实；Subject 按 reference 的 Subject 规则生成，不直接照搬 Redmine 标题。
-   - 提交者保证（代码规范、无多余代码/文件、自测）按 reference 的 补丁代码提交者要求 节执行，干净版本测试时序和 Review/依赖状态按 测试时序 和 执行解释 节执行：本 skill 不要求自测日志、命令或测试输出，也不因缺少自测证据停止；除非用户明确说明尚未自测或要求协助测试，否则将自测功能正常视为用户保证。自 Review+1、Reviewer 与依赖补丁状态未知时保持未知，不在草稿或最终报告中假设已完成；每项规则都要能指出本地规则引用或当前事实。
-8. 生成提交消息草稿。草稿必须只使用已确认事实，且完整显示拟提交的 subject、body 和 footer；Redmine 问题号必须按已读取规则的精确格式关联。不要把本地路径、未验证的测试结果或猜测写成事实。
-9. 向用户展示以下内容，然后停止等待明确确认：
-   - Redmine 问题详情、已验证的 `issue.project.identifier == bu1-sdk` 和访问结果。
-   - Git 仓库、当前工作分支、目标分支、push remote 和推送范围。
-   - 变更文件清单及简短的事实性摘要。
-   - 本地规则快照的来源页面、版本、`checked_at`、`checked_by`，以及是否使用了过期快照。
-   - 固定字段快照摘要（`HEAD`、工作区与已暂存 diff hash、未跟踪文件 hash、分支/merge/remote/push URL/目标 branch、`commit-msg` hook 路径和 hash；不含文件内容、hook 内容和凭据）。
-   - Gerrit 规则要求和仍待用户回答的问题（有任何一项就不要进入确认阶段）。
-   - 完整的 commit message 草稿。
-   - 明确声明：尚未执行本次流程的 `git add`、`git commit` 或 `git push`；已经存在的用户暂存状态如有则如实说明。
-   - 请求明确回复 `确认提交`。仅“好的”“看起来可以”或未回答所有问题不算确认。
+   When the repository uses `core.hooksPath`, use the path Git resolves.
+7. Read and apply [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md) in full, validating the `Type: [Redmine ID]: [Subject]` structure, the Type enum, and the Subject (at most 50 characters, Simplified Chinese imperative, English proper-noun exceptions, no trailing period), Body (at most 72 characters per line), Footer, and `Change-Id` rules per the 补丁提交格式 section; when the Type cannot be determined uniquely, list candidates and ask the user. Mark the draft with the `source_version`, `checked_at`, and `checked_by` used.
+   - The complete commit message may only contain confirmed facts; generate the Subject per the reference's Subject rules, not by copying the Redmine title.
+   - Follow the reference's 补丁代码提交者要求 section for the committer guarantees (code conventions, no excess code/files, self-testing) and the 测试时序 and 执行解释 sections for clean-version test timing and Review/dependency status: this skill does not ask for self-test logs, commands, or test output and does not stop for missing self-test evidence; unless the user explicitly says self-testing was not done or asks for testing help, treat self-testing as the user's guarantee that it passed. Keep self Review+1, Reviewer, and dependency-patch status unknown when unknown; never assume completion in the draft or final report. Every rule must point to a local rule reference or current fact.
+8. Generate the commit-message draft. The draft may only use confirmed facts and must show the full subject, body, and footer to be committed; associate the Redmine issue number in the exact format of the read rules. Do not write local paths, unverified test results, or guesses as facts.
+9. Show the user the following, then stop and wait for explicit confirmation:
+   - The Redmine issue details, the verified `issue.project.identifier == bu1-sdk`, and the access result.
+   - The Git repository, current work branch, target branch, push remote, and push scope.
+   - The changed-file list and a brief factual summary.
+   - The local rule snapshot's source page, version, `checked_at`, `checked_by`, and whether an expired snapshot is in use.
+   - The fixed-field snapshot summary (`HEAD`, worktree and staged diff hashes, untracked-file hashes, branch/merge/remote/push URL/target branch, `commit-msg` hook path and hash; no file contents, hook contents, or credentials).
+   - The Gerrit rule requirements and any questions still awaiting the user (do not enter the confirmation phase while any remain).
+   - The complete commit-message draft.
+   - An explicit statement that no `git add`, `git commit`, or `git push` has been run in this flow; state truthfully any pre-existing user staged state.
+   - Request an explicit reply of `确认提交`. Merely “好的”, “看起来可以”, or unanswered questions do not count as confirmation.
 
-## 工作区快照固定格式
+## Fixed Workspace Snapshot Format
 
-阶段一生成一次固定字段快照并记录在草稿中；阶段二在 `git add` 前按同一格式重新生成，逐字段比较。任一字段变化都使阶段一的确认失效，回到重新生成草稿并再次请求确认。
+Phase 1 generates the fixed-field snapshot once and records it in the draft; Phase 2 regenerates it in the same format before `git add` and compares field by field. Any field change invalidates the Phase 1 confirmation and requires regenerating the draft and asking for confirmation again.
 
-固定字段与生成方式：
+Fixed fields and their generation:
 
-| 字段 | 生成方式 |
+| Field | Generation method |
 | --- | --- |
-| `HEAD` SHA | `git rev-parse HEAD` 的完整 40 位 SHA |
-| 工作区变更 hash | `git diff --binary HEAD` 输出的 SHA-256 |
-| 已暂存变更 hash | `git diff --cached --binary` 输出的 SHA-256 |
-| 未跟踪文件 hash | `git ls-files --others --exclude-standard -z` 列出的每个路径，按 `路径|类型|大小|内容SHA-256` 记录一行，按路径排序后整体再取一次 SHA-256 |
-| 当前分支 | `git branch --show-current` |
-| merge 配置 | `git config --get branch.<local_branch>.merge` 规范化后的值 |
-| remote 名称 | `git config --get branch.<local_branch>.remote` |
-| push URL | 阶段零确认的唯一 `pushurl`（无 `pushurl` 时用唯一 `url`） |
-| 目标 branch | `branch.<local_branch>.merge` 去掉 `refs/heads/` 前缀后的值 |
-| hook 路径 | `git rev-parse --git-path hooks/commit-msg`（使用 `core.hooksPath` 时以 Git 解析结果为准） |
-| hook hash | `commit-msg` hook 文件的 SHA-256 |
+| `HEAD` SHA | the full 40-character SHA of `git rev-parse HEAD` |
+| Worktree change hash | SHA-256 of the `git diff --binary HEAD` output |
+| Staged change hash | SHA-256 of the `git diff --cached --binary` output |
+| Untracked-file hash | one `path|type|size|content-SHA-256` line per path listed by `git ls-files --others --exclude-standard -z`, sorted by path, then one more SHA-256 over the whole list |
+| Current branch | `git branch --show-current` |
+| Merge config | the normalized value of `git config --get branch.<local_branch>.merge` |
+| Remote name | `git config --get branch.<local_branch>.remote` |
+| Push URL | the unique `pushurl` confirmed in Phase 0 (the unique `url` when no `pushurl` exists) |
+| Target branch | `branch.<local_branch>.merge` with the `refs/heads/` prefix removed |
+| Hook path | `git rev-parse --git-path hooks/commit-msg` (the Git-resolved path when `core.hooksPath` is set) |
+| Hook hash | SHA-256 of the `commit-msg` hook file |
 
-生成示例（SHA-256 命令 macOS 用 `shasum -a 256`，Linux 用 `sha256sum`）：
+Generation example (use `shasum -a 256` on macOS and `sha256sum` on Linux for SHA-256):
 
 ```bash
 git rev-parse HEAD
@@ -134,32 +134,32 @@ git ls-files --others --exclude-standard -z | while IFS= read -r -d '' f; do
 done | sort | shasum -a 256
 ```
 
-规则：
+Rules:
 
-- 快照只记录路径、类型、大小和 hash，不记录也不输出未跟踪文件内容、diff 内容、hook 内容、凭据或任何秘密；文件名不变但内容、`HEAD`、remote、hook 或未跟踪文件变化时，对应 hash 或字段值会不同，必须能被发现。
-- 未跟踪文件逐行记录 `路径|类型|大小|内容SHA-256`，按路径排序保证可比较；类型只用 `file`/`symlink`，大小为字节数。
-- 阶段二在 `git add` 前重新生成全部字段并与阶段一逐项比较：任一字段缺失、无法生成或值不同，立即停止，重新执行阶段一生成新草稿，并再次请求明确确认；字段全部一致才允许继续 `git add`。
+- The snapshot records only paths, types, sizes, and hashes; it never records or outputs untracked-file contents, diff contents, hook contents, credentials, or any secret; when content, `HEAD`, remote, hook, or untracked files change without a filename change, the corresponding hash or field value differs and must be discoverable.
+- Record untracked files one per line as `path|type|size|content-SHA-256`, sorted by path so they are comparable; type is only `file`/`symlink` and size is in bytes.
+- Phase 2 regenerates every field before `git add` and compares each against Phase 1: stop immediately when any field is missing, ungeneratable, or different; re-run Phase 1 to generate a new draft and ask for explicit confirmation again; continue to `git add` only when every field matches.
 
-## 阶段二：用户确认后暂存
+## Phase 2: Stage After User Confirmation
 
-1. 只接受针对阶段一完整草稿的明确确认。若用户修改问题号、范围、消息或任何规则相关内容，重新执行受影响的检查并展示新草稿。
-2. 在执行 `git add` 前按「工作区快照固定格式」重新生成全部快照字段，并与阶段一记录逐字段比较。任一字段变化（`HEAD`、工作区或已暂存 diff hash、未跟踪文件、分支、merge 配置、remote 名称、push URL、目标 branch、`commit-msg` hook 路径或 hash）都使阶段一确认失效：停止，重新执行阶段一生成新草稿并再次请求明确确认；不要把确认后新产生的修改静默纳入提交。
-3. 确认快照未变化后才执行 `git add`：
-   - 默认范围：在仓库根目录执行 `git add -A -- .`。
-   - 用户指定范围：仅对确认过的路径执行 `git add -A -- <confirmed-paths>`，正确处理删除和带空格的路径。
-4. 用 `git diff --cached --check`、`git diff --cached --stat`、NUL-safe 的 `git diff --cached --name-only -z` 和必要的 `git diff --cached` 复核暂存内容。用户指定范围时，暂存路径集合必须是 `confirmed-paths` 的子集；任一路径超出范围、规则不允许或校验失败，停止，不提交，不执行 `git restore --staged`。
-5. 将实际暂存文件清单、暂存统计和仍存在的风险告知用户。此时仍不要执行 commit，并展示以下固定选项：
+1. Accept only explicit confirmation of the complete Phase 1 draft. When the user changes the issue number, scope, message, or any rule-related content, re-run the affected checks and show a new draft.
+2. Before running `git add`, regenerate every snapshot field per the Fixed Workspace Snapshot Format and compare each against the Phase 1 record. Any field change (`HEAD`, worktree or staged diff hash, untracked files, branch, merge config, remote name, push URL, target branch, `commit-msg` hook path or hash) invalidates the Phase 1 confirmation: stop, re-run Phase 1 to generate a new draft, and ask for explicit confirmation again; never silently fold changes produced after confirmation into the commit.
+3. Run `git add` only after confirming the snapshot is unchanged:
+   - Default scope: run `git add -A -- .` at the repository root.
+   - User-specified scope: run `git add -A -- <confirmed-paths>` only on the confirmed paths, handling deletions and space-containing paths correctly.
+4. Re-check the staged content with `git diff --cached --check`, `git diff --cached --stat`, NUL-safe `git diff --cached --name-only -z`, and `git diff --cached` as needed. With a user-specified scope, the staged path set must be a subset of `confirmed-paths`; when any path is out of scope, disallowed by the rules, or fails validation, stop without committing and without running `git restore --staged`.
+5. Tell the user the actually staged file list, staging statistics, and remaining risks. Do not commit yet, and present these fixed options:
    1. `amend`
    2. `不amend`
-   只接受用户单独输入 `1` 或 `2`；输入任何其他值都视为非法，必须再次展示这两个选项并询问。输入 `1` 映射为 amend，输入 `2` 映射为不 amend。
+   Accept only the user's single input `1` or `2`; any other value is invalid and the two options must be shown again and re-asked. Input `1` maps to amend, input `2` maps to no amend.
 
-## 阶段三：amend 选择、提交和推送
+## Phase 3: Amend Choice, Commit, and Push
 
-1. 只接受阶段二选项中的单独输入 `1` 或 `2`：输入 `1` 时确认 `HEAD` 存在且用户理解这会改写当前最新提交，然后执行 amend；输入 `2` 时创建新提交。任何其他输入都是非法，重新展示选项并询问，不自行选择。选择 `1` 后，不得用阶段一为新提交生成的草稿直接覆盖 `HEAD` 的原有消息：先读取并记录 `HEAD` 的完整 commit message，将本次已确认 staged 变更的事实性摘要作为新段落追加到现有 Body。必须原样保留 `HEAD` 已有的 Subject、Body 和 Footer；摘要插入现有 Footer（包括 `Change-Id`）之前；没有 Footer 时才追加到消息末尾。无法可靠识别 Footer，或无法从实际变更中生成事实性摘要时，停止并询问。
-2. 用临时文件保存最终 commit message：新提交使用阶段一已确认的完整草稿；amend 使用按上一步规则合成、并在 commit 前展示核对的消息，执行 `git commit --amend -F <temporary-message-file>`。设置 `GIT_EDITOR=true`，避免打开交互式编辑器；不要把临时文件放进仓库。提交失败时保留暂存区并报告错误，不推送。
-3. 执行 commit 前再次使用 NUL-safe 的 `git diff --cached --name-only -z` 检查 staged 路径集合。用户指定范围时，任一路径不属于 `confirmed-paths` 都使流程停止；同时记录实际 staged 集合，供提交后比较实际 commit 范围。
-4. 提交成功后验证：`git status --short`、`git show --stat --oneline HEAD`、`git diff-tree --no-commit-id --name-only -r HEAD -z`、完整 commit message、作者和 `Change-Id`。将实际 commit 路径集合与 commit 前记录的 staged 集合比较；若路径集合不一致、hook 改写了消息、没有合法 Change-Id 或提交结果与草稿不一致，停止推送并询问用户。
-5. 提交成功且所有规则/前置条件复核通过后，只使用阶段零已确认的 `confirmed_remote_name`、`confirmed_push_url` 和 `confirmed_dest_branch` 推送到 Gerrit 审核 ref；不重新解析、重新读取或重新选择 remote、host、push URL 或目标 branch，不改写为普通分支 push，不添加 `--force`：
+1. Accept only a single `1` or `2` from the Phase 2 options: for `1`, confirm `HEAD` exists and the user understands this rewrites the current latest commit, then amend; for `2`, create a new commit. Any other input is invalid: show the options again and ask, never choosing for the user. After choosing `1`, never overwrite `HEAD`'s existing message with the Phase 1 draft generated for a new commit: first read and record `HEAD`'s complete commit message, then append a factual summary of the confirmed staged changes as a new paragraph to the existing Body. Preserve `HEAD`'s existing Subject, Body, and Footer exactly; insert the summary before the existing Footer (including `Change-Id`); only when there is no Footer, append it at the end of the message. Stop and ask when the Footer cannot be identified reliably or a factual summary cannot be generated from the actual changes.
+2. Save the final commit message in a temporary file: a new commit uses the complete Phase 1-confirmed draft; an amend uses the message synthesized per the previous step and shown for verification before committing, run as `git commit --amend -F <temporary-message-file>`. Set `GIT_EDITOR=true` to avoid opening an interactive editor; do not put the temporary file into the repository. On commit failure, preserve the staging area, report the error, and do not push.
+3. Before committing, re-check the staged path set with NUL-safe `git diff --cached --name-only -z`. With a user-specified scope, any path outside `confirmed-paths` stops the flow; record the actual staged set for comparing the actual commit scope afterward.
+4. After a successful commit, verify with `git status --short`, `git show --stat --oneline HEAD`, `git diff-tree --no-commit-id --name-only -r HEAD -z`, the full commit message, the author, and `Change-Id`. Compare the actual committed path set with the staged set recorded before the commit; stop and ask the user when the path sets differ, the hook rewrote the message, there is no valid Change-Id, or the commit result differs from the draft.
+5. After the commit succeeds and every rule/precondition re-check passes, push to the Gerrit review ref using only the `confirmed_remote_name`, `confirmed_push_url`, and `confirmed_dest_branch` fixed in Phase 0; do not re-resolve, re-read, or re-select the remote, host, push URL, or target branch, do not rewrite as a plain-branch push, and do not add `--force`:
    ```bash
    git push \
         --receive-pack='gerrit receive-pack' \
@@ -167,9 +167,9 @@ done | sort | shasum -a 256
         "$confirmed_remote_name" \
         "refs/heads/$local_branch:refs/for/$confirmed_dest_branch"
    ```
-6. 只有 `git push` 返回成功才报告补丁已提交到 Gerrit 审核。最终报告包含 Redmine 问题号、提交 SHA、是否 amend、提交消息摘要、阶段零已确认的 `confirmed_remote_name`、`local_branch`、`confirmed_dest_branch` 和 Gerrit 审核 ref；推送失败时原样总结错误和下一步，不声称补丁已进入审核。
-   - 单独报告“干净版本打补丁后的完整功能测试”和提交者自 Review+1 的状态；如果尚未完成或用户没有提供证据，标记为“待完成/未知”，不得写成通过。
+6. Report the patch as submitted to the Gerrit review only when `git push` returns success. The final report includes the Redmine issue number, commit SHA, whether it was an amend, the commit-message summary, and the Phase 0-confirmed `confirmed_remote_name`, `local_branch`, `confirmed_dest_branch`, and the Gerrit review ref; on push failure, summarize the error and next steps verbatim without claiming the patch entered the review.
+   - Report the “clean-version patch full functional test” and committer self Review+1 statuses separately; when not yet done or the user provided no evidence, mark them “pending/unknown” and never write them as passed.
 
-## 停止条件
+## Stop Conditions
 
-遇到凭据不可用、Redmine 问题号不存在、Redmine 项目标识缺失或不是 `bu1-sdk`、本地规则快照缺失或元数据无效、快照过期且用户未明确接受旧快照、刷新事务正在进行、规则冲突、阶段零本地工作分支硬门槛失败、提交者角色无法确认、分支/remote/目标分支无法确认、工作区快照任一固定字段在确认后变化、用户指定范围包含已有范围外 staged 路径、git add 后或 commit 前 staged 路径超出确认范围、范围包含未经确认的敏感或无关文件、commit-msg hook 缺失、消息不符合规则、Change-Id 缺失、commit 失败或 push 失败，都必须停在当前阶段并向用户说明具体原因。业务流程不得通过网络补齐规则，也不得自行改写 reference、取消用户已有暂存或扩大提交范围。阶段零失败时不得继续读取 Redmine、分析 Git 修改或生成 commit 草稿；用户创建并切换本地工作分支后重新调用 skill。任何不确定的规则或事实都先询问用户，不能用经验值补齐。
+Stop at the current phase and explain the concrete reason to the user for any of: unavailable credentials; a nonexistent Redmine issue number; a missing or non-`bu1-sdk` Redmine project identifier; a missing or invalid local rule snapshot; an expired snapshot the user did not explicitly accept; an ongoing refresh transaction; a rule conflict; a Phase 0 local work-branch hard-gate failure; an unconfirmable committer role; unconfirmable branch/remote/target branch; any fixed workspace snapshot field changing after confirmation; a user-specified scope containing pre-existing out-of-scope staged paths; staged paths exceeding the confirmed scope after `git add` or before commit; the scope containing unconfirmed sensitive or unrelated files; a missing `commit-msg` hook; a message that violates the rules; a missing Change-Id; a failed commit; or a failed push. The flow must never fetch rules over the network, rewrite the reference, unstage the user's existing staging, or widen the commit scope. On a Phase 0 failure, do not continue to read Redmine, analyze Git changes, or generate a commit draft; the user must create and switch to a local work branch and invoke the skill again. Ask the user about any uncertain rule or fact; never fill in with assumed values.
