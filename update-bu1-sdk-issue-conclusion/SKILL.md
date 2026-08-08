@@ -16,7 +16,7 @@ Load and follow the available **Redmine** skill for authentication, issue API us
 
 2. **Verify the issue belongs to BU1-SDK.** Read the issue with its tracker, custom fields, journals, and relevant history. Confirm that `issue.project.identifier` is exactly `bu1-sdk`. Locate the `结论` custom field and record its numeric field ID and current value. Read the exact tracker name and existing issue context as input to the conclusion rules. Stop and ask for a corrected issue number when the issue does not exist, access is denied, or the project identifier differs. Never update an issue based only on its title or project name.
 
-3. **Load the local conclusion snapshot.** Read [references/bu1-sdk-conclusion-rules.md](references/bu1-sdk-conclusion-rules.md) before drafting. Record its `source_version`, `checked_at`, and `checked_by`. The local snapshot is the only rules source during this workflow; do not access online Wiki, refresh rules, or modify the reference. If the snapshot is missing, metadata is invalid, `checked_at` is not a valid UTC ISO 8601 timestamp, or it is more than 30 days old, stop and ask the user to call [refresh-bu1-sdk-rules](../refresh-bu1-sdk-rules/SKILL.md). If the user explicitly accepts an old but complete snapshot after a failed refresh, continue only with that explicit permission and disclose the snapshot age in the draft and final report. If `refresh-bu1-sdk-rules/.refresh.pending` exists, stop until the refresh transaction is completed or recovered according to that skill.
+3. **Load the local conclusion snapshot.** Read [references/bu1-sdk-conclusion-rules.md](references/bu1-sdk-conclusion-rules.md) before drafting. Record its `source_version`, `checked_at`, and `checked_by`. Apply the reference's 快照使用与刷新 section as the single source of snapshot-validity conditions: when the snapshot is missing, metadata invalid, `checked_at` unparseable or older than 30 days, a refresh transaction is pending, or the scenario is uncovered, stop and route to [refresh-bu1-sdk-rules](../refresh-bu1-sdk-rules/SKILL.md) exactly as that section directs; an explicitly accepted old snapshot requires the disclosure that section mandates. Do not access online Wiki, refresh rules, or modify the reference.
 
 4. **Inspect the current Git reference.** In the current Git repository:
    - Resolve the repository root with `git rev-parse --show-toplevel`.
@@ -39,10 +39,7 @@ Load and follow the available **Redmine** skill for authentication, issue API us
    - Inspect changed files and the patch needed to report the change accurately. Do not inspect or infer testing, review, or dependency completion from Gerrit labels, branch state, or other repository evidence.
    - Record the change number (`_number`), revision SHA, branch, project, status, and the matching basis (which fields matched at each layer); show them in the draft and in the final report.
 
-6. **Draft the conclusion.** Analyze the issue context, exact tracker, local commit, Gerrit metadata, current conclusion, and cached rules. The conclusion must contain these three elements with concrete content:
-   - `问题原因：` why the issue occurred, supported by the issue and commit analysis;
-   - `处理方案：` what was changed, including the Gerrit change number when a patch exists;
-   - `影响范围：` affected modules, targets, branches, versions, or a precise statement of the verified scope.
+6. **Draft the conclusion.** Analyze the issue context, exact tracker, local commit, Gerrit metadata, current conclusion, and cached rules. Apply the conclusion structures defined in [references/bu1-sdk-conclusion-rules.md](references/bu1-sdk-conclusion-rules.md): the three-element 普通结论 (普通结论 section), the 问题性质-based structure selection with the patch-cause formats (问题性质与结论补充格式 section), and the supplemental formats for `规格变更`, `已拒绝`, and `反馈` (same section). Use concrete evidence and preserve uncertainty in the wording when the scope or cause is not established; the conclusion remains concise and in Chinese.
 
    For tracker `错误`, read the existing `问题性质` only as context for selecting the conclusion structure. When it has a value, use that value. When it is empty, present exactly this prompt:
    ```text
@@ -52,15 +49,7 @@ Load and follow the available **Redmine** skill for authentication, issue API us
    3. 上个版本修改引入
    请输入 1-3：
    ```
-   Parse the answer strictly. Trim surrounding ASCII whitespace, then accept only the single digit `1`, `2`, or `3`. Reject full-width digits or punctuation (`１`-`３`, `1。`, `2、`), attached explanations (`2 当前版本修改引入`), multiple values, and empty input. On any rejection, state the concrete reason and re-display the same prompt in full; never guess, complete, or reinterpret the answer. Record the user's raw answer verbatim and show it in the draft; do not rephrase it. Map `1` to the ordinary conclusion structure; map `2` and `3` to the corresponding patch-cause structure. This selection affects only the conclusion draft; it does not update the `问题性质` field.
-
-   Apply the supplemental format for the issue's current context:
-   - For an `错误` issue whose `问题性质` is `当前版本修改引入` or `上个版本修改引入`, include the patch-cause wording and `修改补丁：{{patch(<Gerrit change number>)}}` when the numeric change number is available.
-   - For `规格变更`, include the reason, before/after differences, usage examples, affected project/module/system/chip scope, and the patch when available.
-   - For `已拒绝`, include the explicit rejection reason and the recorded software version manager agreement.
-   - For `反馈`, include the analysis-process conclusion and the recorded issue creator agreement.
-
-   Use concrete evidence and preserve uncertainty in the wording when the scope or cause is not established. The conclusion remains concise and in Chinese.
+   Parse the answer strictly. Trim surrounding ASCII whitespace, then accept only the single digit `1`, `2`, or `3`. Reject full-width digits or punctuation (`１`-`３`, `1。`, `2、`), attached explanations (`2 当前版本修改引入`), multiple values, and empty input. On any rejection, state the concrete reason and re-display the same prompt in full; never guess, complete, or reinterpret the answer. Record the user's raw answer verbatim and show it in the draft; do not rephrase it. Map `1` and `2`/`3` to the structures defined in the reference's 问题性质与结论补充格式 section; this selection affects only the conclusion draft and does not update the `问题性质` field.
 
 7. **Present the draft and wait.** Show the target issue/project, exact tracker, local rule source, `source_version`, `checked_at`, and `checked_by`, latest Git commit SHA, Gerrit instance, change number, revision SHA, branch, project, status, and matching basis, evidence-based change summary, current conclusion, and proposed conclusion in a fenced text block. State that no Redmine write has happened. Ask for explicit confirmation in exactly this format: `确认更新`. Trim surrounding ASCII whitespace before matching; a request for edits, a vague acknowledgement, a partial phrase, or any other text is not confirmation: state the concrete reason and re-ask with the required format. Keep the user's raw confirmation text verbatim and include it in the final report. This protocol has no `abandoned` prerequisite; non-mainline patch abandonment is outside this skill and the user handles it separately. A request for edits starts a revised draft and requires confirmation again.
 
@@ -72,9 +61,9 @@ Phase 1 is complete only when the issue is verified as `bu1-sdk`, the `结论` f
 
 2. Before writing, re-read the issue and verify that the project is still `bu1-sdk`, the `结论` field ID is unchanged, and the current conclusion has not changed in a way that invalidates the draft. Re-read the local rule snapshot metadata and confirm its `source_version`, `checked_at`, `checked_by`, and content hash are unchanged from Phase 1; a changed or newly refreshed snapshot invalidates the draft and requires regeneration and confirmation. If any of these changed, refresh the analysis and ask for confirmation again.
 
-3. Send one authenticated `PUT /issues/<issue-id>.json` request with `Content-Type: application/json`. In the request, update only:
+3. Send one authenticated `PUT /issues/<issue-id>.json` request with `Content-Type: application/json`, following the **Redmine** skill's AI Write Audit Trail. In the request, update only:
    - the `结论` custom field using its discovered ID;
-   - `issue.notes` with a concise Chinese audit note beginning exactly with `由 luyong-AI 操作：` and listing the issue ID plus the conclusion summary.
+   - `issue.notes` with the audit note in the same PUT request, per the Redmine skill's exact prefix and format.
 
    Do not update `status_id`, `done_ratio`, assignee, tags, target version, dates, relations, or any other custom field. Do not claim success before the request returns success.
 
