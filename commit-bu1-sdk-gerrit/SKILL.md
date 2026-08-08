@@ -57,7 +57,7 @@ confirmed_remote_name="$remote_name"
 confirmed_push_url="$push_url"
 confirmed_remote_host="$remote_host"
 confirmed_dest_branch="$dest_branch"
-printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和目标 branch。后续阶段只能复核并使用这些已确认值。'
+printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和目标 branch。这些硬检查只在阶段零执行，是唯一权威首次执行点；后续阶段不重新执行这些检查，只复核快照一致性，并只能使用这些已确认值。'
 ```
 
 以上任一检查失败时，立即结束本次 skill 调用，不读取 Redmine、不分析 Git 修改、不生成 commit 草稿，也不执行任何 `git add`、`git commit` 或 `git push`。不要自动创建、切换、改名或修复分支。用户需要先完成本地工作分支创建/切换及目标分支配置，再重新调用 skill。
@@ -76,15 +76,11 @@ printf '%s\n' '已固定本次流程目标：remote 名称、push URL、host 和
    - 先使用 NUL-safe 的 `git diff --cached --name-only -z` 读取调用 skill 前已经存在的 index 路径，并按完整路径集合与 `confirmed-paths` 比较；覆盖修改、新增、删除、重命名和带空格的路径。
    - 任何已有 staged 路径不属于确认范围时，立即停止，展示路径、当前范围和阻塞原因，要求用户明确扩大范围或自行处理；不要执行 `git restore --staged`，不要静默改变用户 index。
    - 没有范围外路径时，确认指定范围内每个路径都存在于快照中，并把范围、已有 staged 路径和本次待加入路径分别记录在草稿中。
-5. 复核阶段零固定的工作分支目标：
-   - 重新读取当前分支的 `branch.<local_branch>.remote`、该 remote 的唯一 `pushurl`（没有时使用唯一 `url`）、解析出的 host 和 `branch.<local_branch>.merge`。
+5. 复核阶段零固定的工作分支目标（只做快照一致性复核，不重新执行阶段零的硬检查）：
+   - 重新读取当前分支 `branch.<local_branch>.remote` 的当前原始值、该 remote 的全部 `pushurl`（没有 `pushurl` 时用全部 `url`）、解析出的 host 和 `branch.<local_branch>.merge` 的当前原始值。
    - 将这些当前值与阶段零保存的 `confirmed_remote_name`、`confirmed_push_url`、`confirmed_remote_host`、`confirmed_dest_branch` 逐项比较。
-   - 任一值变化、缺失、出现多个候选或 host 不在白名单时，停止并重新生成草稿；不得重新选择另一个 remote。
-   - 使用阶段零已确认的目标执行目标分支存在性检查：
-   ```bash
-   git ls-remote --exit-code --heads "$confirmed_push_url" "refs/heads/$confirmed_dest_branch" >/dev/null
-   ```
-   草稿展示 remote 名称、push URL（按秘密处理规则脱敏）、host、目标 branch 和一致性校验结果。
+   - 任一值变化、缺失或与已确认值不一致（包括出现新的多个候选）时，停止并重新生成草稿；不得重新选择另一个 remote，也不重新执行阶段零的 host 白名单或 `ls-remote` 检查（它们是阶段零的唯一职责）。
+   - 草稿展示 remote 名称、push URL（按秘密处理规则脱敏）、host、目标 branch 和一致性校验结果。
 6. 检查仓库 hooks 路径：
    ```bash
    commit_msg_hook=$(git rev-parse --git-path hooks/commit-msg)
@@ -163,7 +159,7 @@ done | sort | shasum -a 256
 2. 用临时文件保存最终 commit message：新提交使用阶段一已确认的完整草稿；amend 使用按上一步规则合成、并在 commit 前展示核对的消息，执行 `git commit --amend -F <temporary-message-file>`。设置 `GIT_EDITOR=true`，避免打开交互式编辑器；不要把临时文件放进仓库。提交失败时保留暂存区并报告错误，不推送。
 3. 执行 commit 前再次使用 NUL-safe 的 `git diff --cached --name-only -z` 检查 staged 路径集合。用户指定范围时，任一路径不属于 `confirmed-paths` 都使流程停止；同时记录实际 staged 集合，供提交后比较实际 commit 范围。
 4. 提交成功后验证：`git status --short`、`git show --stat --oneline HEAD`、`git diff-tree --no-commit-id --name-only -r HEAD -z`、完整 commit message、作者和 `Change-Id`。将实际 commit 路径集合与 commit 前记录的 staged 集合比较；若路径集合不一致、hook 改写了消息、没有合法 Change-Id 或提交结果与草稿不一致，停止推送并询问用户。
-5. 提交成功且所有规则/前置条件复核通过后，使用阶段零已确认的 remote 和目标 branch 推送到 Gerrit 审核 ref；不重新读取或选择 remote，不改写为普通分支 push，不添加 `--force`：
+5. 提交成功且所有规则/前置条件复核通过后，只使用阶段零已确认的 `confirmed_remote_name`、`confirmed_push_url` 和 `confirmed_dest_branch` 推送到 Gerrit 审核 ref；不重新解析、重新读取或重新选择 remote、host、push URL 或目标 branch，不改写为普通分支 push，不添加 `--force`：
    ```bash
    git push \
         --receive-pack='gerrit receive-pack' \
