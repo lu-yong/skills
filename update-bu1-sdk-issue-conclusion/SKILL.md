@@ -52,7 +52,7 @@ Load and follow the available **Redmine** skill for authentication, issue API us
    3. 上个版本修改引入
    请输入 1-3：
    ```
-   Accept exactly one of `1`, `2`, or `3`. For any other input, show the same prompt again. Map `1` to the ordinary conclusion structure; map `2` and `3` to the corresponding patch-cause structure. This selection affects only the conclusion draft; it does not update the `问题性质` field.
+   Parse the answer strictly. Trim surrounding ASCII whitespace, then accept only the single digit `1`, `2`, or `3`. Reject full-width digits or punctuation (`１`-`３`, `1。`, `2、`), attached explanations (`2 当前版本修改引入`), multiple values, and empty input. On any rejection, state the concrete reason and re-display the same prompt in full; never guess, complete, or reinterpret the answer. Record the user's raw answer verbatim and show it in the draft; do not rephrase it. Map `1` to the ordinary conclusion structure; map `2` and `3` to the corresponding patch-cause structure. This selection affects only the conclusion draft; it does not update the `问题性质` field.
 
    Apply the supplemental format for the issue's current context:
    - For an `错误` issue whose `问题性质` is `当前版本修改引入` or `上个版本修改引入`, include the patch-cause wording and `修改补丁：{{patch(<Gerrit change number>)}}` when the numeric change number is available.
@@ -62,13 +62,13 @@ Load and follow the available **Redmine** skill for authentication, issue API us
 
    Use concrete evidence and preserve uncertainty in the wording when the scope or cause is not established. The conclusion remains concise and in Chinese.
 
-7. **Present the draft and wait.** Show the target issue/project, exact tracker, local rule source, `source_version`, `checked_at`, and `checked_by`, latest Git commit SHA, Gerrit instance, change number, revision SHA, branch, project, status, and matching basis, evidence-based change summary, current conclusion, and proposed conclusion in a fenced text block. State that no Redmine write has happened. Ask for explicit confirmation such as `确认更新`; a request for edits starts a revised draft and requires confirmation again.
+7. **Present the draft and wait.** Show the target issue/project, exact tracker, local rule source, `source_version`, `checked_at`, and `checked_by`, latest Git commit SHA, Gerrit instance, change number, revision SHA, branch, project, status, and matching basis, evidence-based change summary, current conclusion, and proposed conclusion in a fenced text block. State that no Redmine write has happened. Ask for explicit confirmation in exactly this format: `确认更新`. Trim surrounding ASCII whitespace before matching; a request for edits, a vague acknowledgement, a partial phrase, or any other text is not confirmation: state the concrete reason and re-ask with the required format. Keep the user's raw confirmation text verbatim and include it in the final report. This protocol has no `abandoned` prerequisite; non-mainline patch abandonment is outside this skill and the user handles it separately. A request for edits starts a revised draft and requires confirmation again.
 
 Phase 1 is complete only when the issue is verified as `bu1-sdk`, the `结论` field is identified, the available Git/Gerrit evidence is summarized, and the complete proposed conclusion has been shown.
 
 ## Phase 2: Update and verify the conclusion
 
-1. Re-check that the user's latest message explicitly confirms the displayed conclusion draft. If the user requests any edit, apply the edit, rerun the conclusion checks, display the revised draft, and wait for confirmation again.
+1. Re-check the user's latest message against the Phase 1 confirmation contract: trim surrounding ASCII whitespace and require exactly `确认更新`; anything else is not confirmation: give the concrete reason and re-ask with the required format. If the user requests an edit, apply exactly that edit, re-run every affected check (conclusion structure, underlying facts and fields, Git/Gerrit identity, verified scope), display the revised draft with the user's raw edit request preserved verbatim, and wait for confirmation again. When any new fact arrives after confirmation: a changed issue value, a changed or refreshed rule snapshot, a changed commit or Gerrit identity, or a corrected user-supplied fact: re-run all affected checks and require a fresh confirmation; never proceed on a partial re-check of one aspect while others may have changed.
 
 2. Before writing, re-read the issue and verify that the project is still `bu1-sdk`, the `结论` field ID is unchanged, and the current conclusion has not changed in a way that invalidates the draft. Re-read the local rule snapshot metadata and confirm its `source_version`, `checked_at`, `checked_by`, and content hash are unchanged from Phase 1; a changed or newly refreshed snapshot invalidates the draft and requires regeneration and confirmation. If any of these changed, refresh the analysis and ask for confirmation again.
 
