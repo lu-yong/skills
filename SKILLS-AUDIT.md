@@ -72,7 +72,7 @@ cc-switch 配置（`~/.cc-switch/settings.json`）：
 | `gerrit` | 必须保留 | 四端可部署。两套实例、Digest/Basic 差异、XSSI guard、`commit:` 查询、分页与 TLS 例外全是内部知识。`SKILL.md:184` 的 “Agent-host compatibility” 段落是全仓库最好的宿主无关写法，应作为其他 skill 的改写模板。**当前 Pi 未链接它，是真实缺口。** |
 | `grill-with-docs` | 合并（用户已决定暂缓） | 不单独部署。第二阶段已把 slash 调用改为宿主无关表述，但正文仍只是 `grilling` + `domain-modeling` 的组合入口；合并进 `grilling` 的动作按用户决定暂不执行。 |
 | `grilling` | 保留 | 四端可部署。“一次一个问题、事实自己查、决策等用户”是可观测的行为约束，不是默认行为。建议限定在设计决策场景，不阻塞普通实现。 |
-| `handoff` | 保留、标准化 | 四端可部署，本机同时装 4 个 CLI，交接文档是真实需求。应移除非标准 `argument-hint`，把参数语义写进正文，并明确输出路径与文件名。 |
+| `handoff` | 保留 | 四端可部署，本机同时装 4 个 CLI，交接文档是真实需求。`argument-hint` 与 `disable-model-invocation` 按第四阶段决策保留；仍可明确输出路径与文件名。 |
 | `improve-codebase-architecture` | 保留 | 四端可选。可视化 HTML 架构报告是独特产物。第二阶段已把 `Agent tool with subagent_type=Explore` 与 `SKILL.md`/`HTML-REPORT.md` 中的 5 处 slash 调用改为宿主无关表述。 |
 | `install-openspec-superpowers-bridge` | 保留、暂停部署 | 本机未安装 OpenSpec CLI，也没有任何宿主装了 Superpowers，部署后无法验证。等真正采用 OpenSpec 再启用。安装脚本与升级 diff 本身质量可以，`SKILL_DIR` 解析方式正确。 |
 | `openspec-language-config` | 保留、暂停部署 | 同上。另外 description 仍只提 “Codex”，应改成 agent 或写入 `metadata.compatibility`。 |
@@ -212,7 +212,7 @@ handoff, improve-codebase-architecture
 
 ## Frontmatter 兼容性
 
-用 Codex 自带 `skill-creator/scripts/quick_validate.py` 的规则校验（该脚本本身因缺 `pyyaml` 无法直接运行，按其 `allowed_properties` 等价复现）：**20 个 skill 中 11 个未通过**。
+用 Codex 自带 `skill-creator/scripts/quick_validate.py` 实测（`pyyaml` 已安装，脚本可直接运行）：**20 个 skill 中 11 个未通过**。
 
 允许字段集合为：
 
@@ -222,39 +222,37 @@ name, description, license, allowed-tools, metadata
 
 未通过原因全部是宿主扩展字段：
 
-- `disable-model-invocation: true` — 13 个 skill 使用
-- `argument-hint: "..."` — 仅 `handoff` 使用
+- `disable-model-invocation: true` — 11 个 skill 使用
+- `argument-hint: "..."` — 仅 `handoff` 使用（该 skill 两个字段都有）
 
 通过校验的 9 个：`adb`、`code-review`、`codebase-design`、`domain-modeling`、`gerrit`、`grilling`、`prototype`、`redmine`、`tdd`。
 
 各宿主实际表现（本次已实测）：
 
-- **Claude Code 支持 `disable-model-invocation`。** 本仓库链接给它的 6 个 skill 中，带该字段的 3 个（`grill-with-docs`、`handoff`、`improve-codebase-architecture`）确实不出现在模型可自动调用的列表里，只保留手动调用。
-- **OpenCode 会忽略该字段的语义。** `opencode debug skill` 把这 6 个全部发现并列出，包括带该字段的 3 个。
+- **Claude Code 支持 `disable-model-invocation`，且是完全移出上下文，不是"可见但禁止自动调用"。** 本仓库链接给它的 6 个 skill 中，带该字段的 3 个（`grill-with-docs`、`handoff`、`improve-codebase-architecture`）根本不出现在模型的可用 skill 列表里。
+- **OpenCode 忽略该字段。** 其内建 `customize-opencode` 文档给出的 skill 字段只有 `name`、`description` 和可选的 `license`/`compatibility`/`metadata`；唯一的过滤规则是"没有 `description` 的 skill 会被过滤掉、永不呈给模型"。`opencode debug skill` 把 6 个全部列出。
 - **Codex 的官方校验器把它报为 unexpected key。**
 - **Pi 加载宽松**，接受该字段。
-- `agents/openai.yaml` 只对 Codex/ChatGPT 的 UI 与隐式调用策略生效，Pi、OpenCode、Claude Code 会忽略。当前 `handoff/agents/openai.yaml` 已用 `policy.allow_implicit_invocation: false` 表达同一意图，这是 Codex 侧的正确写法。
+- `agents/openai.yaml` 只对 Codex/ChatGPT 的 UI 与隐式调用策略生效，Pi、OpenCode、Claude Code 会忽略。
 
-跨宿主共享的 `SKILL.md` 应优先只用标准字段：
+### 决策：保留宿主扩展字段，把校验失败记为已知差异
 
-```yaml
----
-name: skill-name
-description: Explain what it does and when to use it.
-license: MIT
-metadata:
-  compatibility: Requires tool X when applicable.
-allowed-tools: read bash
----
-```
+第四阶段原计划"frontmatter 只留标准字段 + 把仅手动调用的意图迁到 `agents/openai.yaml`"。实测后该计划被否决，因为这个迁移**不等价**：
 
-通常只需 `name` 和 `description`。
+- 去掉 `disable-model-invocation` 会让这 11 个 skill 的 `description` 进入 Claude Code 和 Pi 的**每一轮**上下文，合计 2168 字符（约 550-700 token），使 skill 常驻上下文开销翻倍。OpenCode 无变化（今天就已在上下文里），Codex 无变化（字段本就非法）。
+- 替代方案 `policy.allow_implicit_invocation` **只对 Codex 生效**。也就是说，为了通过一个 Codex 专属校验器，代价是在唯二该机制真正生效的宿主上丢掉全部隐藏效果。
+- 这 11 个里有三个是有副作用的内部 skill（`commit-bu1-sdk-gerrit` 推 Gerrit、`refresh-bu1-sdk-rules` 改规则快照、`update-bu1-sdk-issue-conclusion` 写 Redmine）。它们被标为仅手动调用是刻意设计，不应为校验器让步。
 
-如果跨宿主一致性优先，不要依赖“仅手动调用”这一扩展语义，因为 OpenCode 不认。更稳妥的组合是：
+因此：
 
-- 收紧 `description` 的触发条件，让模型按需加载。
-- 在 Codex 侧用 `agents/openai.yaml` 的 `policy.allow_implicit_invocation` 表达。
-- 对真正危险的 skill 用宿主权限配置约束，而不是只靠 frontmatter。
+- **`SKILL.md` 保留 `disable-model-invocation` 和 `argument-hint`。**
+- **`quick_validate.py` 的 11 条报错是预期结果，不是缺陷。** 它反映的是宿主扩展字段与 Codex 校验口径的差异，不是 skill 写坏了。任何自动化校验都应把这 11 条列入白名单，只对其余错误类型报警。
+- **Codex 侧用 `agents/openai.yaml` 的 `policy.allow_implicit_invocation: false` 表达同一意图**，与 frontmatter 保持一一对应。已实测该对应关系在 20 个 skill 上双向一致：11 个带字段的都有对应 policy，没有任何 skill 只设了 policy 而不带字段。
+
+新增 skill 时的判断顺序：
+
+- 无副作用、希望模型自主触发 → 只用标准字段，收紧 `description` 的触发条件。
+- 有外部写操作或破坏性动作 → 加 `disable-model-invocation`，并同步在 `agents/openai.yaml` 加 `policy.allow_implicit_invocation: false`；对真正危险的操作再叠加宿主权限配置，不要只靠 frontmatter。
 
 ## 跨 skill 调用不兼容（第二阶段已修复）
 
@@ -322,7 +320,7 @@ skill-loading mechanism; do not assume a slash command or a particular Agent API
 5. ~~`to-spec` 强制“extremely extensive”的用户故事清单。~~ 该 skill 已在第三阶段删除。
 6. ~~`prototype` 与 `implement` 中的强制 branch/commit 行为。~~ `prototype` 已降级为建议；`implement` 已删除。
 7. `openspec-language-config` 的 description 仍只提 “Codex”，应改成 agent 或写入 `metadata.compatibility`；`install-openspec-superpowers-bridge` 已经用 `metadata.compatibility` 表达，可作为参照。
-8. `handoff` 的 `argument-hint` 是非标准字段，语义应改写进正文。
+8. ~~`handoff` 的 `argument-hint` 是非标准字段，语义应改写进正文。~~ 按第四阶段的决策保留该字段；正文本来就说明了参数语义（"treat them as a description of what the next session will focus on"），frontmatter 里的只是 Claude Code 的输入提示，删掉是净损失。
 9. **正文语言不统一**：`refresh-bu1-sdk-rules` 全中文，`commit-bu1-sdk-gerrit` 英文正文 + 中文 shell 报错，`update-bu1-sdk-issue-conclusion` 全英文 + 中文交互契约。面向用户的报错和确认词用中文是刻意设计且正确，但三个同族 skill 的正文语言建议统一。
 10. `codebase-design` 的“禁止使用 service / API / boundary”对通用代码库过于僵硬，建议改为“在本 skill 的讨论范围内使用这套术语”。
 
@@ -354,9 +352,9 @@ skill-loading mechanism; do not assume a slash command or a particular Agent API
 
 ### 第四阶段：格式标准化与验证
 
-1. 共享 skill 的 frontmatter 只保留 `name`、`description`（必要时 `license`、`metadata`、`allowed-tools`）。
-2. 把“仅手动调用”的意图迁移到 `agents/openai.yaml` 的 `policy.allow_implicit_invocation` 与宿主权限配置。
-3. 用 Codex `quick_validate.py` 的规则重新校验全部共享 skill（需先安装 `pyyaml`）。
+1. ✅ ~~共享 skill 的 frontmatter 只保留标准字段。~~ **已否决并改为保留宿主扩展字段**，理由见「Frontmatter 兼容性 → 决策」一节：去掉 `disable-model-invocation` 会让 11 个 skill 的 description 进入 Claude Code 与 Pi 的每轮上下文，而替代方案只对 Codex 生效。
+2. ✅ Codex 侧用 `agents/openai.yaml` 的 `policy.allow_implicit_invocation: false` 表达同一意图，与 frontmatter 一一对应。已补齐 `install-openspec-superpowers-bridge` 与 `openspec-language-config` 两处缺失，并双向验证 20 个 skill 无不一致。
+3. ✅ 用 Codex `quick_validate.py` 实测全部 skill（`pyyaml` 已安装）：9 通过 / 11 未通过，报错全部来自上述两个扩展字段，是预期结果。自动化校验应把这 11 条列入白名单。
 4. 用 `opencode debug skill --pure` 确认 OpenCode 的发现结果与预期一致。
 5. 在 Pi 中检查 available skills 和 `/skill:<name>`；在 Claude Code 中确认自动调用列表与 `disable-model-invocation` 的预期一致。
 6. 为每个保留的 skill 准备至少一个应触发案例和一个不应触发案例。
