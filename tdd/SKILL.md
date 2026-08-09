@@ -19,7 +19,9 @@ See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking g
 
 A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
 
-**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything — agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
+**Agree the seams before the work, not before each test.** At the start of a piece of work, write down the seams you intend to test at and put them to the user. Once agreed, write tests at those seams without stopping to re-confirm each one. You can't test everything — agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
+
+Go back to the user mid-work only when the seam choice actually changes: a seam that wasn't in the agreed set, a seam that turns out to be the wrong place to observe the behaviour, or a new public boundary the work has created. Routine test-by-test choices inside an agreed seam are yours.
 
 Ask: "What's the public interface, and which seams should we test?"
 
@@ -33,4 +35,4 @@ Ask: "What's the public interface, and which seams should we test?"
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
-- **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.
+- **Refactor while green.** Once the test passes, clean up what you just wrote — names, duplication, structure — with the suite green the whole time. This is the third beat of red → green → refactor, not a separate stage; the passing test is what makes the cleanup safe. Keep it to the code the cycle touched. Larger restructuring that spans modules is a design decision, not part of the loop — surface it rather than folding it into a cycle.
