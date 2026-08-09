@@ -185,6 +185,39 @@ curl -X DELETE -H "X-Redmine-API-Key: {API_KEY}" \
   "{REDMINE_URL}/issues/{id}/watchers/{user_id}.json"
 ```
 
+### 获取问题关系
+```bash
+curl -H "X-Redmine-API-Key: {API_KEY}" \
+  "{REDMINE_URL}/issues/{id}/relations.json"
+```
+
+也可以在问题详情里用 `include=relations` 一并取得。
+
+### 创建问题关系
+```bash
+curl -X POST -H "X-Redmine-API-Key: {API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "relation": {
+      "issue_to_id": 12346,
+      "relation_type": "blocks"
+    }
+  }' \
+  "{REDMINE_URL}/issues/12345/relations.json"
+```
+
+方向以 URL 中的问题为主语：上例表示 12345 阻塞 12346。`relation_type` 取值见下方“问题关系类型”。`precedes`/`follows` 额外接受 `delay`（天数），其他类型不接受。
+
+创建后用 `GET /issues/{id}.json?include=relations` 复核关系确实建立，不要只凭 POST 返回码就声称边已连上。
+
+### 删除问题关系
+```bash
+curl -X DELETE -H "X-Redmine-API-Key: {API_KEY}" \
+  "{REDMINE_URL}/relations/{relation_id}.json"
+```
+
+删除用的是关系自身的 ID（来自关系列表的 `id` 字段），不是问题 ID。
+
 ---
 
 ## Projects API

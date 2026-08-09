@@ -22,7 +22,7 @@ The map is a single issue on this repo's issue tracker, labelled `wayfinder:map`
 
 The map is an **index**, not a store. It lists the decisions made and points at the tickets that hold their detail; a decision lives in exactly one place — its ticket — so the map never restates it, only gists it and links.
 
-**Where the map, its child tickets, blocking, and frontier queries physically live is tracker-specific.** The issue tracker comes from the project's own configuration — an `AGENTS.md`/`CLAUDE.md` tracker section, a tracker skill this host makes available, or whatever convention the repo already uses. Consult that tracker's "Wayfinding operations" notes for how _this_ repo expresses them. If no tracker has been configured, default to the local-markdown tracker.
+**Where the map, its child tickets, blocking, and frontier queries physically live is tracker-specific.** The issue tracker comes from the project's own configuration — an `AGENTS.md`/`CLAUDE.md` tracker section, or whatever convention the repo already uses. **Redmine is the default** where the project has one; see [Wayfinding operations on Redmine](#wayfinding-operations-on-redmine). If no tracker has been configured, default to the local-markdown tracker.
 
 ### The map body
 
@@ -62,7 +62,7 @@ Each ticket is a **child issue** of the map; the tracker's issue id is its ident
 <the decision or investigation this ticket resolves>
 ```
 
-Each ticket carries a `wayfinder:<type>` label — one of `research`, `prototype`, `grilling`, `task` (see [Ticket Types](#ticket-types)).
+Each ticket carries a `wayfinder:<type>` label — one of `research`, `prototype`, `grilling`, `task` (see [Ticket Types](#ticket-types)). How the tracker expresses a label is tracker-specific; on Redmine it is a subject prefix.
 
 A session **claims** a ticket by assigning it to the dev driving the map, **first**, before any work, so concurrent sessions skip it. That assignee _is_ the claim: an open, unassigned ticket is unclaimed.
 
@@ -76,7 +76,7 @@ Every ticket is either **HITL** — human in the loop, worked *with* a human who
 
 The skills named below are loaded through the host's native skill-loading mechanism; do not assume a slash command, `$name` syntax, or a particular Agent API. If a named skill is unavailable here, tell the user which one is missing.
 
-- **Research** (AFK): Reading documentation, third-party APIs, or local resources like knowledge bases to surface a fact a decision waits on. Resolved by the **research** skill, in an isolated sub-agent where the host supports one. Use when knowledge outside the current working directory is required.
+- **Research** (AFK): Reading documentation, third-party APIs, or local resources like knowledge bases to surface a fact a decision waits on. Investigate against **primary sources** — official docs, source code, specs, first-party APIs — not a secondary write-up of them, and cite the source that owns each claim. Run it in an isolated sub-agent where the host supports one. Use when knowledge outside the current working directory is required.
 - **Prototype** (HITL): Raise the fidelity of the discussion by making a cheap, rough, concrete artifact to react to — an outline, a rough take, a stub, or UI/logic code via the **prototype** skill. Links the prototype as an asset. Use when "how should it look" or "how should it behave" is the key question.
 - **Grilling** (HITL): Conversation via the **grilling** and **domain-modeling** skills, one question at a time. The default case.
 - **Task** (HITL or AFK): Manual work that must happen before a *decision* can be made — nothing to decide, prototype, or research, but the discussion is blocked until it's done. Signing up for a service so its API can be judged, provisioning access, moving data so its shape can be seen. This is the one type that *does* rather than decides — and it earns its place by unblocking a decision, not by delivering the destination. The agent drives it alone where it can (AFK); otherwise it hands the human a precise checklist (HITL). Resolved when the work is done; the answer records what was done and any resulting facts (credentials location, new URLs, row counts) later tickets depend on.
@@ -102,6 +102,49 @@ Out-of-scope work never graduates — the frontier stops at the destination — 
 
 Ruling something out of scope is a scoping act, not a step on the route. When a ticket that already exists turns out to sit past the destination — mis-scoped in while charting, or exposed by a resolution — **close it** (a closed ticket is unambiguously off the frontier) and leave one line in the **Out of scope** section: the gist plus why it's out of scope, linking the closed ticket. It stays out of **Decisions so far**, which records the route actually walked — a scope boundary isn't a step on it.
 
+## Wayfinding operations on Redmine
+
+Load and follow the available **Redmine** skill for the instance URL, authentication, issue API usage, the issue-relations API, and the AI write-audit requirement. Load it through the host's native skill-loading mechanism; do not assume a slash command, `$name` syntax, or a particular Agent API. If it is unavailable here, tell the user it is missing and stop — do not hand-roll the Redmine calls.
+
+Ask for the target project identifier before creating anything, and never guess it.
+
+Redmine has no labels, so both wayfinder labels are **subject prefixes**:
+
+```text
+[wayfinder:map] <destination name>
+[wf:research]   <the question>
+[wf:prototype]  <the question>
+[wf:grilling]   <the question>
+[wf:task]       <the question>
+```
+
+The prefix is the machine-readable part; the rest of the title is the **name** the human reads and the one you refer to it by.
+
+| Wayfinder concept | Redmine expression |
+| --- | --- |
+| The map | one issue whose subject starts `[wayfinder:map]` |
+| Map body | the map issue's `description` |
+| Ticket | a child issue — `parent_issue_id` set to the map's id |
+| Ticket type | the `[wf:<type>]` subject prefix |
+| Blocking | an issue relation with `relation_type: "blocks"` on the blocker |
+| Claim | `assigned_to_id` set to the dev driving the map |
+| Open / closed | issue status — `status_id=open` versus a closed status |
+| Resolution answer | a note on the ticket, posted in the same request that closes it |
+
+**Blocking must be `blocks`, not `precedes`.** Redmine refuses to close an issue while something blocks it, which is what makes the frontier real; `precedes` only shifts dates and enforces nothing.
+
+**The frontier query** is the map's open children, minus the blocked, minus the claimed. Redmine can filter the first and the last but not "unblocked", so:
+
+1. `GET /issues.json?parent_id=<map-id>&status_id=open&limit=100`, paginating with `offset` until every child is collected.
+2. Read each candidate's relations and drop any that still has an open `blocked by`.
+3. Drop any with `assigned_to` set — those are claimed by another session.
+
+Never report the frontier from an unpaginated first page.
+
+**Updating the map** — Decisions-so-far, Not-yet-specified and Out-of-scope all live in the map issue's `description`, so appending is a read-modify-write of one field. Re-read the description immediately before writing and rebase your edit on what you find: other sessions work the same map concurrently, and a stale write silently drops their decisions.
+
+Every write follows the Redmine skill's audit-note requirement.
+
 ## Invocation
 
 Two modes. Either way, **never resolve more than one ticket per session** — with the exception of research tickets.
@@ -114,7 +157,7 @@ User invokes with a loose idea.
 2. **Map the frontier.** Grill again, **breadth-first** this time: fan out across the whole space rather than deep on any one thread, surfacing the open decisions and the first steps takeable now. **If this surfaces no fog** — the way to the destination is already clear, the whole journey small enough for one session — you don't need a map. Stop and ask the user how they'd like to proceed.
 3. **Create the map** (label `wayfinder:map`): Destination and Notes filled in, Decisions-so-far empty, the fog sketched into **Not yet specified**.
 4. **Create the tickets you can specify now** as child issues of the map — then wire blocking edges in a **second pass** (issues need ids before they can reference each other). Wiring sorts them into the frontier and the blocked; everything you can't yet specify stays in the fog — the **Not yet specified** section.
-5. **Resolve the research tickets.** For each `research` ticket you just created, run the **research** skill against it — in parallel isolated sub-agents when the host supports them, sequentially otherwise — capturing its findings on a throwaway `research/<name>` branch with a context pointer from the ticket.
+5. **Resolve the research tickets.** Work each `research` ticket you just created — in parallel isolated sub-agents when the host supports them, sequentially otherwise — capturing its findings on a throwaway `research/<name>` branch with a context pointer from the ticket.
 6. Stop — charting is one session's work; it hand-resolves nothing.
 
 ### Work through the map

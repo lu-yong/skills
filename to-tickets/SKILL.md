@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets** — tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-The issue tracker and triage label vocabulary come from the project's own configuration — an `AGENTS.md`/`CLAUDE.md` tracker section, a tracker skill this host makes available, or whatever convention the repo already uses. If no tracker is configured, use the local-file form in step 5.
+The issue tracker comes from the project's own configuration — an `AGENTS.md`/`CLAUDE.md` tracker section, or whatever convention the repo already uses. **Redmine is the default** where the project has one; see [Publishing to Redmine](#publishing-to-redmine). If no tracker is configured, use the local-file form in step 5.
 
 ## Process
 
@@ -59,12 +59,33 @@ Iterate until the user approves the breakdown.
 
 Publish the approved tickets. **How** depends on the tracker the project configured — the tickets are the same either way, only the shape of the blocking edges changes:
 
+- **Redmine** → see [Publishing to Redmine](#publishing-to-redmine) below.
+- **Another issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
 - **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below — one ticket per file, never a single combined file.
-- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Apply the `ready-for-agent` triage label unless instructed otherwise — the tickets are agent-grabbable by construction.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
 Do NOT close or modify any parent issue.
+
+### Publishing to Redmine
+
+Load and follow the available **Redmine** skill for the instance URL, authentication, issue API usage, the issue-relations API, and the AI write-audit requirement. Load it through the host's native skill-loading mechanism; do not assume a slash command, `$name` syntax, or a particular Agent API. If it is unavailable here, tell the user it is missing and stop — do not hand-roll the Redmine calls.
+
+**Ask for the target project identifier before creating anything, and never guess it.** Confirm the project exists and the credentials can write to it. Show the user the full ticket list, the project, and the edges you are about to create, and get explicit confirmation — creating N issues is a bulk external write and is not undone by a single delete.
+
+Redmine has no labels. Express the triage label as a subject prefix:
+
+```text
+[ready-for-agent] <ticket title>
+```
+
+Then:
+
+1. **Create the issues in dependency order** (blockers first), one per ticket, so each blocking edge has a real issue id to reference. The ticket body goes in `description` using the issue template below. Record each ticket's returned issue id against its draft number.
+2. **Wire the blocking edges** once every issue exists, one relation per edge, using `relation_type: "blocks"` on the blocker (the blocker is the subject: it blocks the dependent). Use `blocks`, not `precedes` — Redmine refuses to close an issue while something blocks it, which is exactly the frontier semantics these tickets need; `precedes` only shifts dates and enforces nothing.
+3. **Verify** every intended edge by re-reading each issue's relations, then report the created issue ids with their edges. Do not claim an edge exists on the strength of the POST alone.
+
+Leave `status_id`, assignee, target version, and dates alone — those are the human's. If issue creation succeeds but wiring fails partway, report exactly which issues exist and which edges were created; do not delete issues to "clean up" without asking.
 
 <local-ticket-template>
 
