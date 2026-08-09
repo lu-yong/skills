@@ -2,3 +2,5 @@ interface:
   display_name: "OpenSpec Language Config"
   short_description: "Configure OpenSpec artifact languages"
   default_prompt: "Use $openspec-language-config to configure OpenSpec artifacts to be written in Simplified Chinese."
+policy:
+  allow_implicit_invocation: false

@@ -2,3 +2,5 @@ interface:
   display_name: "Install OpenSpec Bridge"
   short_description: "Install OpenSpec superpowers-bridge"
   default_prompt: "Use $install-openspec-superpowers-bridge to install the OpenSpec superpowers-bridge schema into this project and wire AGENTS.md routing."
+policy:
+  allow_implicit_invocation: false
