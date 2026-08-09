@@ -5,7 +5,7 @@
 
 ## 范围
 
-本报告审查当前仓库中的 **23 个 skill**，回答两个问题：
+本报告审查当前仓库中的 **20 个 skill**，回答两个问题：
 
 1. 按当前前沿 coding agent（GPT-5.6 / Claude Opus 5 级别）的能力，哪些 skill 已无必要或约束过度。
 2. 这些 skill 是否适配本机实际安装的四个 Agent CLI。
@@ -73,19 +73,16 @@ cc-switch 配置（`~/.cc-switch/settings.json`）：
 | `grill-with-docs` | 合并（用户已决定暂缓） | 不单独部署。第二阶段已把 slash 调用改为宿主无关表述，但正文仍只是 `grilling` + `domain-modeling` 的组合入口；合并进 `grilling` 的动作按用户决定暂不执行。 |
 | `grilling` | 保留 | 四端可部署。“一次一个问题、事实自己查、决策等用户”是可观测的行为约束，不是默认行为。建议限定在设计决策场景，不阻塞普通实现。 |
 | `handoff` | 保留、标准化 | 四端可部署，本机同时装 4 个 CLI，交接文档是真实需求。应移除非标准 `argument-hint`，把参数语义写进正文，并明确输出路径与文件名。 |
-| `implement` | 不部署 | 完全重复默认行为；slash 调用已在第二阶段改为宿主无关表述，但结尾无条件“Commit your work to the current branch”仍不适合所有仓库（第三阶段处理）。 |
 | `improve-codebase-architecture` | 保留 | 四端可选。可视化 HTML 架构报告是独特产物。第二阶段已把 `Agent tool with subagent_type=Explore` 与 `SKILL.md`/`HTML-REPORT.md` 中的 5 处 slash 调用改为宿主无关表述。 |
 | `install-openspec-superpowers-bridge` | 保留、暂停部署 | 本机未安装 OpenSpec CLI，也没有任何宿主装了 Superpowers，部署后无法验证。等真正采用 OpenSpec 再启用。安装脚本与升级 diff 本身质量可以，`SKILL_DIR` 解析方式正确。 |
 | `openspec-language-config` | 保留、暂停部署 | 同上。另外 description 仍只提 “Codex”，应改成 agent 或写入 `metadata.compatibility`。 |
-| `prototype` | 保留、放宽 | 四端可部署。UI 多方案与逻辑状态机两个分支有价值；规则 6 强制“提交到 throwaway branch 并在 issue 上留指针”不适合所有仓库，应降级为建议。 |
+| `prototype` | 保留 | 四端可部署。UI 多方案与逻辑状态机两个分支有价值。规则 6 的强制提交已在第三阶段降级为建议，并要求跟随仓库自身惯例。 |
 | `redmine` | 必须保留 | 四端可部署。实例 URL、`SECRET.md` 相对解析规则、审计前缀 `由 luyong-AI 操作：`、状态 ID 表都是内部知识。注意 `redmine/SECRET.md` 当前在本机不存在，凭据未配置前所有依赖它的流程都会失败。 |
 | `refresh-bu1-sdk-rules` | 必须保留 | 唯一负责在线读取并维护本地规则快照的 skill，带 `.refresh.pending` 事务标记、staging 目录和原子替换。必须与两个业务 skill 同时部署。 |
-| `research` | 当前版本不部署 | 12 行，只规定“spin up a background agent”，没有任何可移植执行方式。另外它是**唯一不在 cc-switch 数据库中的 skill**，当前 cc-switch 根本无法为任何宿主部署它。 |
-| `tdd` | 可选 | 参考材料（seam 定义、反模式、tracer bullet、垂直切片）有真实价值。但“每写一个测试前必须与用户确认 seam”在强模型下过度阻塞，且“Refactoring is not part of the loop”把重构错误地排除出红绿循环。建议放宽后再部署，或只给观察到 TDD 纪律问题的宿主。 |
-| `to-spec` | 不部署 | 对已删除安装类 skill 的引用已在第二阶段清除；仍强制“extremely extensive”的用户故事清单，容易产出低信号文档。 |
-| `to-tickets` | 可选 | 垂直切片与 expand-contract 宽重构序列是真知识，值得留在源码。两处对已删除安装类 skill 的引用已在第二阶段清除，未配置 tracker 时退回 step 5 的本地文件形式。若要长期保留，建议直接接入现有 `redmine`。 |
+| `tdd` | 可选 | 参考材料（seam 定义、反模式、tracer bullet、垂直切片）有真实价值。第三阶段已把 seam 确认从“每个测试前”放宽到“开工前一次约定，seam 集合变化时才回头问”，并把 refactor 改回红绿循环的第三拍。 |
+| `to-tickets` | 保留 | 垂直切片与 expand-contract 宽重构序列是真知识。第三阶段已接入 `redmine`：Redmine 为默认 tracker，`ready-for-agent` 用标题前缀表达，blocking 边用 `blocks` 关系；未配置 tracker 时仍退回 step 5 的本地文件形式。 |
 | `update-bu1-sdk-issue-conclusion` | 必须保留 | Gerrit change 的四层确定性匹配、严格输入解析、写前复核和写审计都是无法由模型推断的组织规则。依赖 `redmine`、`gerrit`、`refresh-bu1-sdk-rules` 三者。 |
-| `wayfinder` | 可选 | 只给承担跨多会话大型规划的宿主。对已删除安装类 skill 的引用与 6 处 slash 调用已在第二阶段清除，未配置 tracker 时退回 local-markdown。**Pi 已有本地个人变体（真实目录，非软链），不要用 cc-switch 版本覆盖。** |
+| `wayfinder` | 保留 | 只给承担跨多会话大型规划的宿主。第三阶段已接入 `redmine`：map/ticket 类型用标题前缀，子问题用 `parent_issue_id`，blocking 用 `blocks` 关系，claim 用 `assigned_to_id`，frontier 查询给出了分页与"去掉被阻塞/已认领"的具体步骤；未配置 tracker 时仍退回 local-markdown。**Pi 已有本地个人变体（真实目录，非软链），不要用 cc-switch 版本覆盖。** |
 | `writing-great-skills` | 可选 | Codex 有 `.system/skill-creator`，该端不必链接。其他端按是否认可这套方法论决定；`GLOSSARY.md` 的失败模式词汇本身质量不错。 |
 
 ## BU1-SDK 捆绑包
@@ -126,7 +123,7 @@ CREATE TABLE skills (
 两点需要注意：
 
 1. **没有 `enabled_pi` 列。** Pi 的 12 个软链接不在 cc-switch 的托管范围内，是手工或旧版本留下的。这解释了为什么 Pi 的部署集与数据库状态完全对不上，也是 BU1-SDK 捆绑残缺的直接原因。要么把 Pi 纳入 cc-switch，要么明确把 Pi 作为手工维护的宿主并单独记录清单。
-2. **`research` 不在 `skills` 表中。** 磁盘上有 23 个 skill，数据库里只有 22 条记录。cc-switch 目前无法为任何宿主部署 `research`。
+2. **cc-switch 数据库有孤儿行。** 第三阶段删除了三个 skill，其中两个在 `skills` 表中仍有记录（均为全部宿主禁用）。磁盘 20 个、数据库 22 条，需要在 cc-switch 侧清理。
 
 “源码存在但没有给某宿主生成链接”是正常状态，不属于漏装。只有下面两种情况才是故障：
 
@@ -148,16 +145,13 @@ CREATE TABLE skills (
 | `grill-with-docs` | 不单独链接 | 不单独链接 | 不单独链接 | 不单独链接 |
 | `grilling` | 链接 | 链接 | 链接 | 链接 |
 | `handoff` | 链接 | 链接 | 链接 | 链接 |
-| `implement` | 不链接 | 不链接 | 不链接 | 不链接 |
 | `improve-codebase-architecture` | 可选 | 可选 | 可选 | 可选 |
 | `install-openspec-superpowers-bridge` | 暂停 | 暂停 | 暂停 | 暂停 |
 | `openspec-language-config` | 暂停 | 暂停 | 暂停 | 暂停 |
 | `prototype` | 链接 | 链接 | 链接 | 链接 |
 | `redmine` | 链接 | 链接 | 链接 | 链接 |
 | `refresh-bu1-sdk-rules` | **链接（当前缺失）** | 可选 | 不链接 | 不链接 |
-| `research` | 不链接 | 不链接 | 不链接 | 不链接 |
 | `tdd` | 可选 | 可选 | 可选 | 可选 |
-| `to-spec` | 不链接 | 不链接 | 不链接 | 不链接 |
 | `to-tickets` | 可选 | 可选 | 可选 | 可选 |
 | `update-bu1-sdk-issue-conclusion` | 链接 | 可选 | 不链接 | 不链接 |
 | `wayfinder` | 保留本地个人变体 | 可选 | 可选 | 可选 |
@@ -218,7 +212,7 @@ handoff, improve-codebase-architecture
 
 ## Frontmatter 兼容性
 
-用 Codex 自带 `skill-creator/scripts/quick_validate.py` 的规则校验（该脚本本身因缺 `pyyaml` 无法直接运行，按其 `allowed_properties` 等价复现）：**23 个 skill 中 13 个未通过**。
+用 Codex 自带 `skill-creator/scripts/quick_validate.py` 的规则校验（该脚本本身因缺 `pyyaml` 无法直接运行，按其 `allowed_properties` 等价复现）：**20 个 skill 中 11 个未通过**。
 
 允许字段集合为：
 
@@ -231,7 +225,7 @@ name, description, license, allowed-tools, metadata
 - `disable-model-invocation: true` — 13 个 skill 使用
 - `argument-hint: "..."` — 仅 `handoff` 使用
 
-通过校验的 10 个：`adb`、`code-review`、`codebase-design`、`domain-modeling`、`gerrit`、`grilling`、`prototype`、`redmine`、`research`、`tdd`。
+通过校验的 9 个：`adb`、`code-review`、`codebase-design`、`domain-modeling`、`gerrit`、`grilling`、`prototype`、`redmine`、`tdd`。
 
 各宿主实际表现（本次已实测）：
 
@@ -264,7 +258,7 @@ allowed-tools: read bash
 
 ## 跨 skill 调用不兼容（第二阶段已修复）
 
-原先 5 个文件 17 行使用 slash 语法跨 skill 调用（`implement`、`grill-with-docs`、`improve-codebase-architecture/SKILL.md` 与 `HTML-REPORT.md`、`wayfinder`）。这些不是通用协议：Pi 显式加载通常用 `/skill:<name>`，Codex 用 `$<skill-name>`，OpenCode 与 Claude Code 由模型调用原生 skill 工具。
+原先 5 个文件 17 行使用 slash 语法跨 skill 调用；其中 4 个文件仍在仓库中（`grill-with-docs`、`improve-codebase-architecture/SKILL.md` 与 `HTML-REPORT.md`、`wayfinder`），第 5 个已在第三阶段随 skill 整体删除。这些不是通用协议：Pi 显式加载通常用 `/skill:<name>`，Codex 用 `$<skill-name>`，OpenCode 与 Claude Code 由模型调用原生 skill 工具。
 
 现已全部改为宿主无关表述，统一采用仓库内既有写法：
 
@@ -276,7 +270,7 @@ skill-loading mechanism; do not assume a slash command or a particular Agent API
 
 （`update-bu1-sdk-issue-conclusion/SKILL.md:11`）
 
-四个文件（`implement`、`grill-with-docs`、`improve-codebase-architecture/SKILL.md`、`wayfinder`）另外补了一句统一说明：命名的 skill 通过宿主原生机制加载，不假设 slash command、`$name` 语法或特定 Agent API；该 skill 在本宿主不可用时，**只告诉用户缺哪一个** —— 不概括被引用 skill 的内容，也不内联替它执行。前者是 duplication（被引用方一改就失配），后者等于让 agent 假装拥有它没有的能力。
+现存的三个文件（`grill-with-docs`、`improve-codebase-architecture/SKILL.md`、`wayfinder`）另外补了一句统一说明：命名的 skill 通过宿主原生机制加载，不假设 slash command、`$name` 语法或特定 Agent API；该 skill 在本宿主不可用时，**只告诉用户缺哪一个** —— 不概括被引用 skill 的内容，也不内联替它执行。前者是 duplication（被引用方一改就失配），后者等于让 agent 假装拥有它没有的能力。第三阶段接入 Redmine 时，`to-tickets` 与 `wayfinder` 的 Redmine 段落沿用了同一句式。
 
 `prototype/UI.md:75` 的 `/prototype/<name>` 是 URL 路由路径，不是 skill 调用，不在此列。
 
@@ -302,12 +296,12 @@ skill-loading mechanism; do not assume a slash command or a particular Agent API
 
 ## 过度确认和强制提交
 
-强模型下以下确认会无谓中断工作：
+强模型下以下确认会无谓中断工作。第三阶段已处理仓库内的三处：
 
-- 每写一个测试前确认 seam（`tdd/SKILL.md`）。
-- 普通规划中的所有决策逐一等待批准。
-- 实现结束后无条件提交当前分支（`implement/SKILL.md:17`）。
-- 原型完成后强制提交到 throwaway branch（`prototype/SKILL.md` 规则 6）。
+- ~~每写一个测试前确认 seam。~~ 已放宽为开工前约定一次 seam 集合，只在集合本身变化时回头问。
+- ~~原型完成后强制提交到 throwaway branch。~~ 已降级为建议，并要求跟随仓库自身惯例。
+- ~~实现结束后无条件提交当前分支。~~ 承载该规则的 skill 已在第三阶段删除。
+- 普通规划中的所有决策逐一等待批准 —— 仍是写新 skill 时要避开的模式。
 
 确认应保留在这些情况，当前内部 skill 在这方面做得是对的：
 
@@ -321,12 +315,12 @@ skill-loading mechanism; do not assume a slash command or a particular Agent API
 
 ## 具体内容问题
 
-1. ~~4 处引用已删除的安装类 skill。~~ **第二阶段已修复**：`to-spec`、`to-tickets`（两处）、`wayfinder` 现在改为“tracker 来自项目自身配置；未配置时 `to-spec` 落到仓库计划目录的 Markdown 文件、`to-tickets` 走 step 5 的本地文件形式、`wayfinder` 走 local-markdown tracker”。
-2. **`research` 不在 cc-switch 数据库中**，磁盘 23 个 / 数据库 22 条。要么补录，要么从源码仓库删除。
-3. **`redmine/SECRET.md` 在本机不存在**（已被 `.gitignore` 正确排除，也未进入 Git 跟踪）。凭据未配置前，`redmine`、`refresh-bu1-sdk-rules` 和两个 BU1-SDK 业务 skill 都会在第一步失败。
+1. ~~4 处引用已删除的安装类 skill。~~ **第二阶段已修复**，其中两个承载文件已在第三阶段整体删除，`to-tickets` 与 `wayfinder` 改为“tracker 来自项目自身配置，默认 Redmine，未配置时退回本地形式”。
+2. ~~`research` 不在 cc-switch 数据库中。~~ 该 skill 已在第三阶段删除；现在的问题反向了：数据库里留有两条已删除 skill 的孤儿记录（磁盘 20 / 数据库 22），需在 cc-switch 侧清理。
+3. **`redmine/SECRET.md` 在本机不存在**（已被 `.gitignore` 正确排除，也未进入 Git 跟踪）。凭据未配置前，`redmine`、`refresh-bu1-sdk-rules`、两个 BU1-SDK 业务 skill，以及第三阶段新接入 Redmine 的 `to-tickets`、`wayfinder` 都会在第一步失败。
 4. **`~/.config/opencode/opencode.json` 中存在明文 provider API key。** 与本仓库无关，但既然 OpenCode 会自动加载 `~/.claude/skills`，任何被部署的 skill 都可能在该目录附近工作，值得单独收敛到环境变量或凭据文件。
-5. `to-spec` 强制“extremely extensive”的用户故事清单，容易让文档规模超过实际决策密度。
-6. `prototype` 与 `implement` 中的强制 branch/commit 行为不适合所有仓库。
+5. ~~`to-spec` 强制“extremely extensive”的用户故事清单。~~ 该 skill 已在第三阶段删除。
+6. ~~`prototype` 与 `implement` 中的强制 branch/commit 行为。~~ `prototype` 已降级为建议；`implement` 已删除。
 7. `openspec-language-config` 的 description 仍只提 “Codex”，应改成 agent 或写入 `metadata.compatibility`；`install-openspec-superpowers-bridge` 已经用 `metadata.compatibility` 表达，可作为参照。
 8. `handoff` 的 `argument-hint` 是非标准字段，语义应改写进正文。
 9. **正文语言不统一**：`refresh-bu1-sdk-rules` 全中文，`commit-bu1-sdk-gerrit` 英文正文 + 中文 shell 报错，`update-bu1-sdk-issue-conclusion` 全英文 + 中文交互契约。面向用户的报错和确认词用中文是刻意设计且正确，但三个同族 skill 的正文语言建议统一。
@@ -337,7 +331,7 @@ skill-loading mechanism; do not assume a slash command or a particular Agent API
 ### 第一阶段：修复部署状态（可立即执行，不改正文）
 
 1. 补齐 Pi 的 BU1-SDK 捆绑：链接 `gerrit` 和 `refresh-bu1-sdk-rules`。
-2. 把 `research` 补录进 cc-switch 数据库，或从源码仓库删除。
+2. 清理 cc-switch 数据库里两条已删除 skill 的孤儿记录（磁盘 20 / 数据库 22）。
 3. 决定 Pi 的托管方式：纳入 cc-switch，或明确标记为手工维护并单独记录清单。
 4. 显式处理 OpenCode 与 Claude Code 的目录耦合：接受二者一致，或用 `opencode.json` 的 `skills.paths` 分离，并让 cc-switch 的 `enabled_opencode` 反映真实状态。
 5. 配置 `redmine/SECRET.md`，否则四个内部 skill 全部不可用。
@@ -350,13 +344,13 @@ skill-loading mechanism; do not assume a slash command or a particular Agent API
 3. ✅ 把 2 处写死的 `Agent` 工具调用改成能力描述，照 `code-review/SKILL.md:86` 与 `gerrit/SKILL.md:184` 的写法。
 4. ⏸ 合并 `grill-with-docs` 进 `grilling` — 用户决定暂缓，两个 skill 继续各自存在。
 
-### 第三阶段：按宿主去重与放宽
+### 第三阶段：按宿主去重与放宽（已完成，2026-08-09）
 
-1. 停止部署 `implement`、`to-spec`、`research`。
-2. 放宽 `tdd` 的 seam 确认、`prototype` 的强制提交。
-3. Codex 不部署 `writing-great-skills`（有 `skill-creator`）与 `code-review`（有 `codex review`）。
-4. 决定是否合并 `codebase-design` 进 `improve-codebase-architecture`。
-5. 决定是否真的需要 `to-tickets` 和 tracker 版 `wayfinder`；若保留，接入现有 `redmine`。
+1. ✅ `implement`、`to-spec`、`research` 从源码仓库直接删除（不是停止部署）。删除前确认四个宿主都没有指向它们的软链接，删除后 `wayfinder` 里两处对 `research` skill 的引用改为内联描述，避免产生新的悬空引用。
+2. ✅ 放宽 `tdd`：seam 确认从“每个测试前”改为“开工前约定一次，只在 seam 集合变化时回头问”；`Refactoring is not part of the loop` 改回红绿循环的第三拍（绿灯下重构，限本轮触及的代码，跨模块重构仍需上浮）。放宽 `prototype` 规则 6：强制提交改为建议，并要求跟随仓库自身惯例。
+3. ✅ Codex 不部署 `writing-great-skills` 与 `code-review` — 用户确认，属部署决策，无正文改动。
+4. ⏸ 不合并 `codebase-design` 进 `improve-codebase-architecture` — 用户决定，两者继续同进同出但保持独立。
+5. ✅ `to-tickets` 与 `wayfinder` 保留并接入 `redmine`。Redmine 无原生 label，统一用标题前缀表达；blocking 用 `blocks` 关系（Redmine 会阻止关闭被阻塞的问题，`precedes` 只挪日期不强制任何东西）；本地 markdown 分支保留为无 tracker 时的退路。为此在 `redmine/references/redmine-api.md` 补充了缺失的问题关系 API（GET/POST/DELETE），让 Redmine API 事实留在拥有它的 skill 里，而不是复制进两个调用方。
 
 ### 第四阶段：格式标准化与验证
 
