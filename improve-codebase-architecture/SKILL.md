@@ -15,6 +15,16 @@ This command is _informed_ by the project's domain model and built on a shared d
 
 Every skill named in this file is loaded through the host's native skill-loading mechanism; do not assume a slash command, `$name` syntax, or a particular Agent API. If a named skill is unavailable here, tell the user which one is missing.
 
+## Report language
+
+The HTML report is written for a Chinese-reading audience. Every piece of prose in it — page title, headings, legend, badges, diagram labels, problem, solution, wins, top recommendation — is Simplified Chinese (简体中文).
+
+What stays in English, spelled exactly as the code spells it: file paths, filenames, module and package names, class/function/variable names, CLI commands, code snippets, config keys, ADR ids, and the domain terms `CONTEXT.md` shares with the codebase. Translating an identifier breaks the link between the report and the code — that link is the whole point of naming files and modules in a review.
+
+The architecture vocabulary is translated on a fixed table — see the term table in [HTML-REPORT.md](HTML-REPORT.md). The pinned Chinese word is as strict as the English one: 接缝 is the only word for **seam**, never 边界 or 缝合点. First occurrence in the report annotates the English in parentheses — `接缝 (seam)` — and every later use is Chinese alone.
+
+This rule governs the report only. The grilling loop in step 3 is a conversation, so it follows whatever language the user is speaking. `CONTEXT.md` and ADR edits follow the **domain-modeling** skill's own language rule instead.
+
 ## Process
 
 ### 1. Explore
@@ -42,24 +52,24 @@ Write a self-contained HTML file to the OS temp directory so nothing lands in th
 
 The report uses **Tailwind via CDN** for layout and styling, and **Mermaid via CDN** for diagrams where a graph/flow/sequence reliably communicates the structure. Mix Mermaid with hand-crafted CSS/SVG visuals — use Mermaid when relationships are graph-shaped (call graphs, dependencies, sequences), and hand-built divs/SVG when you want something more editorial (mass diagrams, cross-sections, collapse animations). Each candidate gets a **before/after visualisation**. Be visual.
 
-For each candidate, render a card with:
+For each candidate, render a card with (Chinese heading in brackets — render that string, not the English):
 
-- **Files** — which files/modules are involved
-- **Problem** — why the current architecture is causing friction
-- **Solution** — plain English description of what would change
-- **Benefits** — explained in terms of locality and leverage, and how tests would improve
-- **Before / After diagram** — side-by-side, custom-drawn, illustrating the shallowness and the deepening
-- **Recommendation strength** — one of `Strong`, `Worth exploring`, `Speculative`, rendered as a badge
+- **Files** [`涉及文件`] — which files/modules are involved
+- **Problem** [`问题`] — why the current architecture is causing friction
+- **Solution** [`方案`] — one plain sentence on what would change
+- **Benefits** [`收益`] — explained in terms of 局部性 (locality) and 杠杆 (leverage), and how tests would improve
+- **Before / After diagram** [`现状` / `深化后`] — side-by-side, custom-drawn, illustrating the shallowness and the deepening
+- **Recommendation strength** — one of `强烈推荐`, `值得一试`, `试探性`, rendered as a badge
 
-End the report with a **Top recommendation** section: which candidate you'd tackle first and why.
+End the report with a **Top recommendation** section headed `首选建议`: which candidate you'd tackle first and why.
 
-**Use CONTEXT.md vocabulary for the domain, and the codebase-design vocabulary for the architecture.** If `CONTEXT.md` defines "Order," talk about "the Order intake module" — not "the FooBarHandler," and not "the Order service."
+**Use CONTEXT.md vocabulary for the domain, and the codebase-design vocabulary for the architecture.** Domain terms keep the spelling `CONTEXT.md` gives them, dropped straight into the Chinese sentence: if `CONTEXT.md` defines "Order," write 「Order intake 模块」— not 「FooBarHandler」, and not 「Order 服务」.
 
-**ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly in the card (e.g. a warning callout: _"contradicts ADR-0007 — but worth reopening because…"_). Don't list every theoretical refactor an ADR forbids.
+**ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly in the card (e.g. a warning callout: _「与 ADR-0007 冲突 —— 但值得重开，因为……」_). Don't list every theoretical refactor an ADR forbids.
 
 See [HTML-REPORT.md](HTML-REPORT.md) for the full HTML scaffold, diagram patterns, and styling guidance.
 
-Do NOT propose interfaces yet. After the file is written, ask the user: "Which of these would you like to explore?"
+Do NOT propose interfaces yet. After the file is written, ask the user which candidate they'd like to explore — that question is conversation, so ask it in the language the user is speaking.
 
 ### 3. Grilling loop
 
