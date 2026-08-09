@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 This skill takes the current conversation context and codebase understanding and produces a spec (you may know this document as a PRD). Do NOT interview the user — just synthesize what you already know.
 
-The issue tracker and triage label vocabulary should have been provided to you — run `/setup-matt-pocock-skills` if not.
+The issue tracker and triage label vocabulary come from the project's own configuration — an `AGENTS.md`/`CLAUDE.md` tracker section, a tracker skill this host makes available, or whatever convention the repo already uses. If no tracker is configured, write the spec to a Markdown file in the repo's planning directory (`.scratch/`, `docs/`, or the existing convention) and tell the user where you put it.
 
 ## Process
 
