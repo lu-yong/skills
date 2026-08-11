@@ -6,9 +6,9 @@
 - 在线来源由 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md) 统一读取和维护；本文件是 `update-bu1-sdk-issue-conclusion` 执行时唯一使用的规则来源。
 - 来源 Wiki：`Redmine使用规则`，source version `98`。
 - `source_version: 98`
-- `source_updated_on: UNKNOWN_UNTIL_REFRESH`
-- `checked_at: INVALID_UNTIL_REFRESH`
-- `checked_by: UNKNOWN_UNTIL_REFRESH`
+- `source_updated_on: 2026-05-20T08:30:11Z`
+- `checked_at: 2026-08-10T12:28:59Z`
+- `checked_by: luyong-AI`
 - `checked_at` 必须由刷新 skill 在成功核对在线页面后写入 UTC ISO 8601 时间；30 天期限只根据 `checked_at` 判断。当前快照缺少可信核对时间，业务 skill 必须先要求刷新。
 - 在线 Wiki 与本地内容的差异只由刷新 skill 展示和处理；本业务 skill 不访问在线 Wiki、不刷新规则、不修改本文件。
 

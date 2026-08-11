@@ -35,8 +35,33 @@ disable-model-invocation: true
 
    `checked_at` 是本次成功读取并核对在线页面的时间，不能用文件 mtime 或 `source_updated_on` 代替。
 5. **比较并展示差异。** 将候选快照与两个本地 reference 分别比较。展示来源版本、核对时间和规则正文的摘要差异；不得展示凭据。即使规则正文没有差异，也要说明只会更新核对元数据。
-6. **等待明确确认。** 只接受针对本次两个候选快照的明确确认，例如 `确认刷新规则`。发现任何规则差异时，未经确认不得替换本地快照。用户要求修改规则内容、只更新其中一个页面或拒绝刷新时，删除 staging 和事务标记，原文件保持不变。
-7. **完整校验后替换。** 确认后再次校验两个候选文件都存在、元数据完整、内容非空且 staging 路径属于本次事务。然后按以下顺序操作：先将两个候选文件分别复制到同一目录下的临时目标文件，校验临时目标内容和 hash 与候选一致，再用原子 rename 替换两个 reference。任何一步失败都停止并报告；不要声称刷新完成。若系统无法保证两个 rename 的整体原子性，应保留事务标记并要求人工按 hash 比对后恢复，不得静默接受半更新状态。
+6. **使用 questionnaire 等待明确确认。** 候选快照和差异展示完毕后，不要只输出文字提示并等待自然语言回复；调用 `questionnaire` 工具展示一个单选确认框：
+   ```json
+   {
+     "questions": [
+       {
+         "id": "refresh_decision",
+         "label": "刷新确认",
+         "prompt": "是否用本次读取到的两个候选快照替换本地规则快照？",
+         "options": [
+           {
+             "value": "confirm",
+             "label": "确认刷新规则",
+             "description": "接受本次两个候选快照（包括核对元数据）并继续原子替换。"
+           },
+           {
+             "value": "cancel",
+             "label": "取消刷新",
+             "description": "删除本次 staging 和事务标记，保留原有 reference。"
+           }
+         ],
+         "allowOther": false
+       }
+     ]
+   }
+   ```
+   只把 questionnaire 返回的结构化 `details.answers` 中 `id` 为 `refresh_decision` 且 `value` 为 `confirm` 视为明确确认；`cancel`、用户取消 questionnaire、缺少/无法解析该答案都不得写入 reference。不要使用 `qna` 扩展生成的 Q&A 汇总，也不要把 questionnaire 之外的“好的”“确认”等模糊自然语言回复当作确认。用户要求修改规则内容、只更新其中一个页面或拒绝刷新时，删除 staging 和事务标记，原文件保持不变；若工具返回无效结果，应重新调用同一个 questionnaire。
+7. **完整校验后替换。** 确认后再次校验两个候选文件都存在、元数据完整、内容非空且 staging 路径属于本次事务。将两个候选文件分别复制为各自目标 reference 所在目录中的临时文件，临时文件名必须包含本次事务 ID；分别校验临时文件内容和 hash 与候选一致。两个临时文件都校验成功后，再分别使用原子 rename 替换两个 reference。两次 rename 不是跨文件整体原子操作，因此必须保留事务标记，直到两个 reference 都替换成功且重新读取校验通过。任一临时文件复制、校验、rename 或最终复核失败，都必须停止并报告，不得声称刷新完成；若只完成了一个 rename，保留事务标记，按事务记录和 hash 进行人工恢复，不得静默接受半更新状态。
 8. **清理并报告。** 只有两个 reference 都替换成功且重新读取校验通过后，才删除 staging 和 `.refresh.pending`。最终报告两个页面的 source version、source updated time、checked_at、checked_by 和是否存在规则差异。清理失败时报告“刷新已写入但事务清理未完成”，业务 skill 会因事务标记停止。
 
 ## 异常恢复

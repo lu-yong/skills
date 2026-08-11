@@ -11,7 +11,7 @@ description: Use when the user asks to query, create, update, delete, analyze, o
 - API key file: `SECRET.md` in the directory containing this loaded `SKILL.md`; resolve it relative to the skill directory, not a Codex/OpenCode install path.
 - Preferred auth header: `X-Redmine-API-Key: <key>`
 
-Read `SECRET.md` only when a Redmine API call is needed. Do not print the key, include it in final answers, or write it into repository files. If running shell commands, avoid command forms that echo the key into logs.
+Read `SECRET.md` only when a Redmine API call is needed. It may contain comments and blank lines. Extract exactly one non-empty configuration line matching `^API_KEY=` and use only the value after the first `=`; never assume the key is on the first line or use a comment/title as the key. Fail closed when the matching line is missing, duplicated, or has an empty value. Do not print the key, include it in final answers, or write it into repository files. If running shell commands, avoid command forms that echo the key into logs.
 
 ## Workflow
 

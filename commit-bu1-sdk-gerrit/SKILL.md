@@ -8,13 +8,17 @@ disable-model-invocation: true
 
 This is a side-effectful skill that the user must invoke explicitly. It exists only to create review patches on the company Gerrit; do not invoke it automatically for ordinary commit, push, or Gerrit query requests. Complete the checks and draft first, then proceed step by step only after user confirmation.
 
+## Questionnaire interaction contract
+
+Use `questionnaire` for every finite user decision or confirmation in this workflow, with stable `id`/`value` pairs, descriptive options, and `allowOther: false`. Read only structured `details.answers`: an explicit cancel or user cancellation stops without side effects; an invalid/missing result repeats the same questionnaire; free-form text never authorizes an action. Use ordinary conversation only for open-ended values such as an issue number, an edit request, or a reason. Do not use the `qna` extension's Q&A summary. Record selected `id`, `value`, and returned label (when present) without recording secrets.
+
 ## Immutable Preconditions
 
 - Require the user to provide one Redmine issue number. Accept only a single positive integer matching `^[1-9][0-9]*$`; reject URLs, `#123`, ranges, comma-separated values, values with surrounding text, and non-decimal IDs.
 - Use the available **Redmine** skill to read `https://git.nationalchip.com/redmine/issues/<id>.json`, confirm the issue exists, is accessible with the current credentials, and its `issue.project.identifier` is exactly `bu1-sdk`; stop when the project identifier is missing or mismatched. Record the issue number, project identifier, title, tracker, and status; stop and ask the user when the issue is inaccessible or does not exist.
 - Business rules come solely from this skill's local snapshot [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md); read it fully before drafting. Do not access the online Wiki, refresh online rules, or write or silently modify any reference file during the run.
 - The snapshot's online sources and version metadata live in the reference; when the snapshot must be checked or updated, stop the current flow and ask the user to invoke [refresh-bu1-sdk-rules](../refresh-bu1-sdk-rules/SKILL.md) separately. This skill never auto-accepts or overrides the refresh skill's results.
-- Before rule checks, confirm the reference exists and is readable, and validate its metadata per the 来源与快照元数据 section of the reference (`source_version`, `source_updated_on`, `checked_at`, `checked_by` present; `checked_at` a parseable UTC ISO 8601 timestamp; the 30-day limit is computed only from `checked_at` per that section). Stop when any metadata is missing, invalid, or expired and require the snapshot to be maintained first; continue only when the user explicitly accepts the old snapshot for this run, and disclose “using an expired local snapshot” in the draft and final report.
+- Before rule checks, confirm the reference exists and is readable, and validate its metadata per the 来源与快照元数据 section of the reference (`source_version`, `source_updated_on`, `checked_at`, `checked_by` present; `checked_at` a parseable UTC ISO 8601 timestamp; the 30-day limit is computed only from `checked_at` per that section). Stop when any metadata is missing or invalid. When the snapshot is expired, display the snapshot metadata and call `questionnaire` with one question whose `id` is `expired_snapshot_decision`, label is `规则快照`, prompt asks whether to use the displayed expired snapshot for this run, options are `{ "value": "accept_old", "label": "本次使用过期快照", "description": "继续本次流程并在草稿和最终报告中披露 using an expired local snapshot。" }` and `{ "value": "refresh_first", "label": "先刷新规则", "description": "停止本次流程，先调用 refresh-bu1-sdk-rules。" }`, and `allowOther` is `false`. Continue only for the exact structured `value: "accept_old"`; `refresh_first` or user cancellation stops without side effects; invalid/missing results re-call the same questionnaire. Disclose “using an expired local snapshot” in the draft and final report.
 - When the refresh transaction marker `refresh-bu1-sdk-rules/.refresh.pending` exists, stop and wait for the refresh transaction to finish or roll back; do not read online content or repair the marker yourself.
 - The current Git repository's changes are the default commit scope, including staged, unstaged, and unignored untracked files. Use an explicit scope only when the user specifies files, paths, patches, or a range.
 - The local work branch must first pass the “Phase 0: local work-branch hard gate”: it must not be detached HEAD, `main`, `master`, `develop`, `sdk-release`, or share the name of the Gerrit target branch, and it must have a valid configured target branch. End the skill immediately on failure and ask the user to create and switch to a local work branch before invoking again.
@@ -74,7 +78,7 @@ When any check above fails, end this skill invocation immediately: do not read R
    The default scope must list every path that would be committed, including deleted, modified, added, and staged paths. For untracked files, read only what is necessary to check whether they are sensitive files, build artifacts, or unrelated content; do not output file contents or credentials to the user. Record the fixed fields of the state collection per the Fixed Workspace Snapshot Format.
 4. Inspect the full change against the `HEAD` baseline: use `git diff --binary HEAD` for staged and unstaged changes; check untracked files separately. Generate and record the complete snapshot per the Fixed Workspace Snapshot Format; the snapshot records only paths, types, sizes, and hashes, never file contents or credentials. When the user explicitly specified a scope:
    - First read the index paths that existed before the skill was invoked with NUL-safe `git diff --cached --name-only -z` and compare the complete path set against `confirmed-paths`; cover modified, added, deleted, renamed, and space-containing paths.
-   - When any pre-existing staged path is outside the confirmed scope, stop immediately, show the path, current scope, and blocking reason, and ask the user to explicitly widen the scope or handle it themselves; do not run `git restore --staged` and never silently alter the user's index.
+   - When any pre-existing staged path is outside the confirmed scope, show the paths, scope, and blocker, then call `questionnaire` with `id: "scope_decision"`, label `提交范围`, a prompt asking whether to include the displayed paths, and options `widen_scope` (`扩展提交范围`: include them, regenerate the complete draft, and obtain a fresh `commit_decision`) and `handle_manually` (`自行处理暂存区`: stop without changing the index), with `allowOther: false`. Continue only for the exact structured `widen_scope` value; `handle_manually` or cancellation stops; invalid/missing results repeat the questionnaire. Never run `git restore --staged` or silently alter the user's index.
    - When no out-of-scope paths exist, confirm every in-scope path is present in the snapshot, and record the scope, the pre-existing staged paths, and the paths to be added separately in the draft.
 5. Re-check the work-branch targets fixed in Phase 0 (snapshot-consistency re-check only; do not re-run Phase 0's hard checks):
    - Re-read the current raw value of `branch.<local_branch>.remote`, all `pushurl` values of that remote (all `url` values when no `pushurl` exists), the parsed host, and the current raw value of `branch.<local_branch>.merge`.
@@ -87,11 +91,11 @@ When any check above fails, end this skill invocation immediately: do not read R
    test -x "$commit_msg_hook" || { printf '%s\n' '缺少可执行 commit-msg hook' >&2; exit 1; }
    ```
    When the repository uses `core.hooksPath`, use the path Git resolves.
-7. Read and apply [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md) in full, validating the `Type: [Redmine ID]: [Subject]` structure, the Type enum, and the Subject (at most 50 characters, Simplified Chinese imperative, English proper-noun exceptions, no trailing period), Body (at most 72 characters per line), Footer, and `Change-Id` rules per the 补丁提交格式 section; when the Type cannot be determined uniquely, list candidates and ask the user. Mark the draft with the `source_version`, `checked_at`, and `checked_by` used.
+7. Read and apply [references/bu1-sdk-gerrit-rules.md](references/bu1-sdk-gerrit-rules.md) in full, validating the `Type: [Redmine ID]: [Subject]` structure, the Type enum, and the Subject (at most 50 characters, Simplified Chinese imperative, English proper-noun exceptions, no trailing period), Body (at most 72 characters per line), Footer, and `Change-Id` rules per the 补丁提交格式 section. When the Type cannot be determined uniquely, call `questionnaire` with one question whose `id` is `type_choice`, whose label is `提交类型`, whose prompt asks the user to choose the Type for the displayed change summary, whose options are exactly the supported candidate Types (each option uses the Type token as `value` and `label`, with its rule meaning in `description`), and whose `allowOther` is `false`. Use only the matching structured `details.answers` value. User cancellation stops drafting; an invalid or missing answer re-calls the same questionnaire. Mark the draft with the `source_version`, `checked_at`, and `checked_by` used.
    - The complete commit message may only contain confirmed facts; generate the Subject per the reference's Subject rules, not by copying the Redmine title.
    - Follow the reference's 补丁代码提交者要求 section for the committer guarantees (code conventions, no excess code/files, self-testing) and the 测试时序 and 执行解释 sections for clean-version test timing and Review/dependency status: this skill does not ask for self-test logs, commands, or test output and does not stop for missing self-test evidence; unless the user explicitly says self-testing was not done or asks for testing help, treat self-testing as the user's guarantee that it passed. Keep self Review+1, Reviewer, and dependency-patch status unknown when unknown; never assume completion in the draft or final report. Every rule must point to a local rule reference or current fact.
 8. Generate the commit-message draft. The draft may only use confirmed facts and must show the full subject, body, and footer to be committed; associate the Redmine issue number in the exact format of the read rules. Do not write local paths, unverified test results, or guesses as facts.
-9. Show the user the following, then stop and wait for explicit confirmation:
+9. Show the user the following, then stop and invoke `questionnaire` for the decision:
    - The Redmine issue details, the verified `issue.project.identifier == bu1-sdk`, and the access result.
    - The Git repository, current work branch, target branch, push remote, and push scope.
    - The changed-file list and a brief factual summary.
@@ -100,11 +104,41 @@ When any check above fails, end this skill invocation immediately: do not read R
    - The Gerrit rule requirements and any questions still awaiting the user (do not enter the confirmation phase while any remain).
    - The complete commit-message draft.
    - An explicit statement that no `git add`, `git commit`, or `git push` has been run in this flow; state truthfully any pre-existing user staged state.
-   - Request an explicit reply of `确认提交`. Merely “好的”, “看起来可以”, or unanswered questions do not count as confirmation.
 
+   Use this questionnaire shape:
+   ```json
+   {
+     "questions": [
+       {
+         "id": "commit_decision",
+         "label": "提交确认",
+         "prompt": "是否按以上完整草稿和已展示的固定工作区快照创建并推送 Gerrit 审核补丁？",
+         "options": [
+           {
+             "value": "confirm",
+             "label": "确认提交",
+             "description": "允许后续按快照执行 git add、git commit，并在提交验证通过后推送。"
+           },
+           {
+             "value": "revise",
+             "label": "修改草稿",
+             "description": "暂不执行任何 Git 写操作；随后用文字说明需要修改的内容。"
+           },
+           {
+             "value": "cancel",
+             "label": "取消提交",
+             "description": "结束本次流程，不执行 git add、git commit 或 git push。"
+           }
+         ],
+         "allowOther": false
+       }
+     ]
+   }
+   ```
+   Continue to Phase 2 only when structured `details.answers` contains `id: "commit_decision"` and `value: "confirm"`. For `revise`, collect the requested edit, rerun the affected checks, show a revised complete draft, and invoke the same questionnaire again. `cancel` or user cancellation stops without any Git write; a missing/invalid answer re-calls the same questionnaire. Natural-language replies are never confirmation. Record the structured confirmation answer instead of requiring a typed `确认提交` reply.
 ## Fixed Workspace Snapshot Format
 
-Phase 1 generates the fixed-field snapshot once and records it in the draft; Phase 2 regenerates it in the same format before `git add` and compares field by field. Any field change invalidates the Phase 1 confirmation and requires regenerating the draft and asking for confirmation again.
+Phase 1 generates the fixed-field snapshot once and records it in the draft; Phase 2 regenerates it in the same format before `git add` and compares field by field. Any field change invalidates the Phase 1 questionnaire answer and requires regenerating the draft and invoking `commit_decision` again.
 
 Fixed fields and their generation:
 
@@ -138,25 +172,46 @@ Rules:
 
 - The snapshot records only paths, types, sizes, and hashes; it never records or outputs untracked-file contents, diff contents, hook contents, credentials, or any secret; when content, `HEAD`, remote, hook, or untracked files change without a filename change, the corresponding hash or field value differs and must be discoverable.
 - Record untracked files one per line as `path|type|size|content-SHA-256`, sorted by path so they are comparable; type is only `file`/`symlink` and size is in bytes.
-- Phase 2 regenerates every field before `git add` and compares each against Phase 1: stop immediately when any field is missing, ungeneratable, or different; re-run Phase 1 to generate a new draft and ask for explicit confirmation again; continue to `git add` only when every field matches.
+- Phase 2 regenerates every field before `git add` and compares each against Phase 1: stop immediately when any field is missing, ungeneratable, or different; re-run Phase 1 to generate a new draft and invoke the `commit_decision` questionnaire again; continue to `git add` only when every field matches.
 
-## Phase 2: Stage After User Confirmation
+## Phase 2: Stage After Questionnaire Confirmation
 
-1. Accept only explicit confirmation of the complete Phase 1 draft. When the user changes the issue number, scope, message, or any rule-related content, re-run the affected checks and show a new draft.
-2. Before running `git add`, regenerate every snapshot field per the Fixed Workspace Snapshot Format and compare each against the Phase 1 record. Any field change (`HEAD`, worktree or staged diff hash, untracked files, branch, merge config, remote name, push URL, target branch, `commit-msg` hook path or hash) invalidates the Phase 1 confirmation: stop, re-run Phase 1 to generate a new draft, and ask for explicit confirmation again; never silently fold changes produced after confirmation into the commit.
+1. Accept only the exact structured `commit_decision` questionnaire answer `value: "confirm"` for the complete Phase 1 draft. A `revise` answer starts revised checks and a fresh questionnaire. `cancel` or user cancellation ends the flow; invalid/missing results re-call the questionnaire; natural-language replies do not authorize staging. When the user changes the issue number, scope, message, or any rule-related content, re-run the affected checks, show a new draft, and obtain a fresh structured confirmation.
+2. Before running `git add`, regenerate every snapshot field per the Fixed Workspace Snapshot Format and compare each against the Phase 1 record. Any field change (`HEAD`, worktree or staged diff hash, untracked files, branch, merge config, remote name, push URL, target branch, `commit-msg` hook path or hash) invalidates the Phase 1 confirmation: stop, re-run Phase 1 to generate a new draft, and invoke the `commit_decision` questionnaire again; never silently fold changes produced after confirmation into the commit.
 3. Run `git add` only after confirming the snapshot is unchanged:
    - Default scope: run `git add -A -- .` at the repository root.
    - User-specified scope: run `git add -A -- <confirmed-paths>` only on the confirmed paths, handling deletions and space-containing paths correctly.
 4. Re-check the staged content with `git diff --cached --check`, `git diff --cached --stat`, NUL-safe `git diff --cached --name-only -z`, and `git diff --cached` as needed. With a user-specified scope, the staged path set must be a subset of `confirmed-paths`; when any path is out of scope, disallowed by the rules, or fails validation, stop without committing and without running `git restore --staged`.
-5. Tell the user the actually staged file list, staging statistics, and remaining risks. Do not commit yet, and present these fixed options:
-   1. `amend`
-   2. `不amend`
-   Accept only the user's single input `1` or `2`; any other value is invalid and the two options must be shown again and re-asked. Input `1` maps to amend, input `2` maps to no amend.
-
+5. Tell the user the actually staged file list, staging statistics, and remaining risks. Do not commit yet. Invoke `questionnaire` with this single-choice decision:
+   ```json
+   {
+     "questions": [
+       {
+         "id": "amend_choice",
+         "label": "提交方式",
+         "prompt": "暂存内容已复核。请选择创建新提交还是修改当前最新提交。",
+         "options": [
+           {
+             "value": "amend",
+             "label": "amend",
+             "description": "改写当前最新提交；将保留其 Subject、Body 和 Footer，并在提交前展示合成后的消息。"
+           },
+           {
+             "value": "no_amend",
+             "label": "不 amend",
+             "description": "使用 Phase 1 已确认的完整 commit message 创建新提交。"
+           }
+         ],
+         "allowOther": false
+       }
+     ]
+   }
+   ```
+   Accept only `details.answers` with `id: "amend_choice"` and `value` equal to `amend` or `no_amend`. User cancellation stops and preserves the staging area; a missing/invalid answer re-calls the same questionnaire; any free-form `1`/`2` reply is not a choice. Do not commit until a valid choice is recorded.
 ## Phase 3: Amend Choice, Commit, and Push
 
-1. Accept only a single `1` or `2` from the Phase 2 options: for `1`, confirm `HEAD` exists and the user understands this rewrites the current latest commit, then amend; for `2`, create a new commit. Any other input is invalid: show the options again and ask, never choosing for the user. After choosing `1`, never overwrite `HEAD`'s existing message with the Phase 1 draft generated for a new commit: first read and record `HEAD`'s complete commit message, then append a factual summary of the confirmed staged changes as a new paragraph to the existing Body. Preserve `HEAD`'s existing Subject, Body, and Footer exactly; insert the summary before the existing Footer (including `Change-Id`); only when there is no Footer, append it at the end of the message. Stop and ask when the Footer cannot be identified reliably or a factual summary cannot be generated from the actual changes.
-2. Save the final commit message in a temporary file: a new commit uses the complete Phase 1-confirmed draft; an amend uses the message synthesized per the previous step and shown for verification before committing, run as `git commit --amend -F <temporary-message-file>`. Set `GIT_EDITOR=true` to avoid opening an interactive editor; do not put the temporary file into the repository. On commit failure, preserve the staging area, report the error, and do not push.
+1. Consume the valid structured `amend_choice` answer from Phase 2. For `value: "amend"`, confirm that `HEAD` exists and proceed only with the rewrite described in the questionnaire; for `value: "no_amend"`, create a new commit. Do not accept a typed `1`/`2` or any other natural-language choice. After choosing `amend`, never overwrite `HEAD`'s existing message with the Phase 1 draft generated for a new commit: first read and record `HEAD`'s complete commit message, then append a factual summary of the confirmed staged changes as a new paragraph to the existing Body. Preserve `HEAD`'s existing Subject, Body, and Footer exactly; insert the summary before the existing Footer (including `Change-Id`); only when there is no Footer, append it at the end of the message. Stop and ask when the Footer cannot be identified reliably or a factual summary cannot be generated from the actual changes.
+2. Save the final commit message in a temporary file: a new commit uses the complete Phase 1-confirmed draft; an amend uses the message synthesized per the previous step. For an amend, display the complete synthesized message and invoke `questionnaire` with one question whose `id` is `amend_message_decision`, label is `amend 消息确认`, prompt asks whether to amend with the displayed message, options are `{ "value": "confirm", "label": "确认使用此 amend 消息", "description": "按已展示的消息执行 git commit --amend。" }` and `{ "value": "cancel", "label": "取消 amend", "description": "保留暂存区，不执行 commit 或 push。" }`, and `allowOther` is `false`. Run `git commit --amend -F <temporary-message-file>` only for the exact structured `value: "confirm"`. `cancel` or user cancellation stops and preserves the staging area; invalid/missing answers re-call the same questionnaire; free-form replies do not authorize the commit. For a new commit, use the already confirmed `commit_decision` draft. Set `GIT_EDITOR=true` to avoid opening an interactive editor; do not put the temporary file into the repository. On commit failure, preserve the staging area, report the error, and do not push.
 3. Before committing, re-check the staged path set with NUL-safe `git diff --cached --name-only -z`. With a user-specified scope, any path outside `confirmed-paths` stops the flow; record the actual staged set for comparing the actual commit scope afterward.
 4. After a successful commit, verify with `git status --short`, `git show --stat --oneline HEAD`, `git diff-tree --no-commit-id --name-only -r HEAD -z`, the full commit message, the author, and `Change-Id`. Compare the actual committed path set with the staged set recorded before the commit; stop and ask the user when the path sets differ, the hook rewrote the message, there is no valid Change-Id, or the commit result differs from the draft.
 5. After the commit succeeds and every rule/precondition re-check passes, push to the Gerrit review ref using only the `confirmed_remote_name`, `confirmed_push_url`, and `confirmed_dest_branch` fixed in Phase 0; do not re-resolve, re-read, or re-select the remote, host, push URL, or target branch, do not rewrite as a plain-branch push, and do not add `--force`:
