@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Refresh BU1-SDK Rules
 
-这是唯一负责在线读取并维护 BU1-SDK 本地规则快照的 skill。`commit-bu1-sdk-gerrit` 和 `update-bu1-sdk-issue-conclusion` 在业务执行期间只读取本地快照，不访问在线 Wiki，不修改 reference 文件，也不检查快照版本、是否过期或刷新事务。需要更新时由用户手动调用本 skill。
+这是唯一负责在线读取并维护 BU1-SDK 本地规则快照的 skill。`commit-gerrit` 和 `update-issue-conclusion` 在业务执行期间只读取本地快照，不访问在线 Wiki，不修改 reference 文件，也不检查快照版本、是否过期或刷新事务。需要更新时由用户手动调用本 skill。
 
 ## 规则来源
 
@@ -17,7 +17,7 @@ disable-model-invocation: true
 - `GET /projects/bu1-sdk/wiki/Gerrit%E8%A1%A5%E4%B8%81%E7%94%9F%E6%88%90%E7%BB%86%E5%88%99.json`
 - `GET /projects/bu1-sdk/wiki/Redmine%E4%BD%BF%E7%94%A8%E8%A7%84%E5%88%99.json`
 
-一次刷新必须完整成功读取这三个页面。前两个页面的规则共同组成 `commit-bu1-sdk-gerrit` 的快照，第三个页面组成 `update-bu1-sdk-issue-conclusion` 的快照。刷新时应保留本地 reference 的规则摘录结构，并同步每个来源页面的版本、更新时间和核对元数据；不要把 API key 或原始认证响应写入文件。
+一次刷新必须完整成功读取这三个页面。前两个页面的规则共同组成 `commit-gerrit` 的快照，第三个页面组成 `update-issue-conclusion` 的快照。刷新时应保留本地 reference 的规则摘录结构，并同步每个来源页面的版本、更新时间和核对元数据；不要把 API key 或原始认证响应写入文件。
 
 ## 刷新流程
 

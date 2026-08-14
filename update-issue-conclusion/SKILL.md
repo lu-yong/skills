@@ -1,10 +1,10 @@
 ---
-name: update-bu1-sdk-issue-conclusion
+name: update-issue-conclusion
 description: Use when the user wants to complete a Redmine issue conclusion; require an issue number, inspect the issue, latest local Git commit, and its Gerrit change, draft a rule-compliant Chinese conclusion, obtain explicit confirmation, then update the conclusion.
 disable-model-invocation: true
 ---
 
-# Update BU1-SDK Issue Conclusion
+# Update Issue Conclusion
 
 This skill is a two-phase workflow: **determine and draft first, write second**.
 

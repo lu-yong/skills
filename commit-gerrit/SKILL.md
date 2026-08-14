@@ -1,10 +1,10 @@
 ---
-name: commit-bu1-sdk-gerrit
+name: commit-gerrit
 description: Submit changes as a Nationalchip Gerrit review, using the local patch-rule snapshot and requiring a valid issue number, a confirmed commit draft, an amend choice, and a verified target branch before pushing.
 disable-model-invocation: true
 ---
 
-# Commit BU1-SDK Gerrit
+# Commit Gerrit
 
 This is a side-effectful skill that the user must invoke explicitly. It exists only to create review patches on the company Gerrit; do not invoke it automatically for ordinary commit, push, or Gerrit query requests. Complete the checks and draft first, then proceed step by step only after user confirmation.
 
@@ -29,31 +29,31 @@ This is the first step of the skill and must run before Redmine validation, chan
 
 ```bash
 local_branch=$(git branch --show-current)
-test -n "$local_branch" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前处于 detached HEAD，未创建或未切换到本地工作分支。请先创建并切换工作分支后重新调用 skill。' >&2; exit 1; }
+test -n "$local_branch" || { printf '%s\n' 'commit-gerrit 已停止：当前处于 detached HEAD，未创建或未切换到本地工作分支。请先创建并切换工作分支后重新调用 skill。' >&2; exit 1; }
 dest_branch=$(git config --get "branch.$local_branch.merge" | sed 's#^refs/heads/##')
-test -n "$dest_branch" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前本地分支没有配置 Gerrit 目标分支。请先创建并配置工作分支后重新调用 skill。' >&2; exit 1; }
+test -n "$dest_branch" || { printf '%s\n' 'commit-gerrit 已停止：当前本地分支没有配置 Gerrit 目标分支。请先创建并配置工作分支后重新调用 skill。' >&2; exit 1; }
 case "$local_branch" in
-  main|master|develop|sdk-release) printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前分支是基础分支，不是本地工作分支。请先创建并切换 topic/work 分支后重新调用 skill。' >&2; exit 1 ;;
+  main|master|develop|sdk-release) printf '%s\n' 'commit-gerrit 已停止：当前分支是基础分支，不是本地工作分支。请先创建并切换 topic/work 分支后重新调用 skill。' >&2; exit 1 ;;
 esac
-test "$local_branch" != "$dest_branch" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前本地分支与 Gerrit 目标分支相同，不是独立工作分支。请先创建并切换工作分支后重新调用 skill。' >&2; exit 1; }
+test "$local_branch" != "$dest_branch" || { printf '%s\n' 'commit-gerrit 已停止：当前本地分支与 Gerrit 目标分支相同，不是独立工作分支。请先创建并切换工作分支后重新调用 skill。' >&2; exit 1; }
 remote_name=$(git config --get "branch.$local_branch.remote")
-test -n "$remote_name" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前分支没有配置 branch.<local_branch>.remote。请先配置工作分支对应的 push remote 后重新调用 skill。' >&2; exit 1; }
+test -n "$remote_name" || { printf '%s\n' 'commit-gerrit 已停止：当前分支没有配置 branch.<local_branch>.remote。请先配置工作分支对应的 push remote 后重新调用 skill。' >&2; exit 1; }
 pushurl_count=$(git config --get-all "remote.$remote_name.pushurl" | wc -l | tr -d ' ')
-if [ "$pushurl_count" -gt 1 ]; then printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前分支对应 remote 配置了多个 pushurl，无法唯一确定推送目标。请先处理 remote 配置后重新调用 skill。' >&2; exit 1; fi
+if [ "$pushurl_count" -gt 1 ]; then printf '%s\n' 'commit-gerrit 已停止：当前分支对应 remote 配置了多个 pushurl，无法唯一确定推送目标。请先处理 remote 配置后重新调用 skill。' >&2; exit 1; fi
 if [ "$pushurl_count" -eq 1 ]; then
   push_url=$(git config --get "remote.$remote_name.pushurl")
 else
   url_count=$(git config --get-all "remote.$remote_name.url" | wc -l | tr -d ' ')
-  test "$url_count" -eq 1 || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前 remote 没有唯一 pushurl 或 url，无法确定推送目标。请先处理 remote 配置后重新调用 skill。' >&2; exit 1; }
+  test "$url_count" -eq 1 || { printf '%s\n' 'commit-gerrit 已停止：当前 remote 没有唯一 pushurl 或 url，无法确定推送目标。请先处理 remote 配置后重新调用 skill。' >&2; exit 1; }
   push_url=$(git config --get "remote.$remote_name.url")
 fi
-test -n "$push_url" || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：当前 remote 的推送 URL 为空。请先配置 remote 后重新调用 skill。' >&2; exit 1; }
+test -n "$push_url" || { printf '%s\n' 'commit-gerrit 已停止：当前 remote 的推送 URL 为空。请先配置 remote 后重新调用 skill。' >&2; exit 1; }
 remote_host=$(printf '%s\n' "$push_url" | sed -E 's#^[^:]+://([^@/]+@)?([^/:]+).*#\2#; s#^[^@]+@([^:]+):.*#\1#')
 case "$remote_host" in
   git.nationalchip.com|gerrit.nationalchip.com) ;;
-  *) printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：push URL host 不是允许的公司 Gerrit host。请先确认 remote 配置后重新调用 skill。' >&2; exit 1 ;;
+  *) printf '%s\n' 'commit-gerrit 已停止：push URL host 不是允许的公司 Gerrit host。请先确认 remote 配置后重新调用 skill。' >&2; exit 1 ;;
 esac
-git ls-remote --exit-code --heads "$push_url" "refs/heads/$dest_branch" >/dev/null || { printf '%s\n' 'commit-bu1-sdk-gerrit 已停止：Gerrit 目标分支尚未创建或当前 push URL 无法访问。请先确认目标分支和 push URL 后重新调用 skill。' >&2; exit 1; }
+git ls-remote --exit-code --heads "$push_url" "refs/heads/$dest_branch" >/dev/null || { printf '%s\n' 'commit-gerrit 已停止：Gerrit 目标分支尚未创建或当前 push URL 无法访问。请先确认目标分支和 push URL 后重新调用 skill。' >&2; exit 1; }
 confirmed_remote_name="$remote_name"
 confirmed_push_url="$push_url"
 confirmed_remote_host="$remote_host"

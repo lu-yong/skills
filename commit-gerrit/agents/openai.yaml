@@ -1,6 +1,6 @@
 interface:
   display_name: "Commit Gerrit"
   short_description: "Submit changes to Nationalchip Gerrit"
-  default_prompt: "Use $commit-bu1-sdk-gerrit to draft, confirm, commit, and push the current repository changes to Nationalchip Gerrit."
+  default_prompt: "Use $commit-gerrit to draft, confirm, commit, and push the current repository changes to Nationalchip Gerrit."
 policy:
   allow_implicit_invocation: false

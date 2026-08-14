@@ -3,7 +3,7 @@
 ## 来源与快照元数据
 - 项目：`BU1-SDK-2007-01-UNIFY`
 - 项目标识：`bu1-sdk`
-- 在线来源由 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md) 统一读取和维护；本文件是 `commit-bu1-sdk-gerrit` 执行时唯一使用的规则来源。
+- 在线来源由 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md) 统一读取和维护；本文件是 `commit-gerrit` 执行时唯一使用的规则来源。
 - `source_version: Gerrit使用规则=12; Gerrit补丁生成细则=9`
 - `source_updated_on: Gerrit使用规则=2022-05-16T11:19:49Z; Gerrit补丁生成细则=2023-08-23T10:58:16Z`
 - `checked_at: 2026-08-10T12:28:59Z`
