@@ -9,7 +9,7 @@
 - `source_updated_on: 2026-05-20T08:30:11Z`
 - `checked_at: 2026-08-10T12:28:59Z`
 - `checked_by: luyong-AI`
-- `checked_at` 必须由刷新 skill 在成功核对在线页面后写入 UTC ISO 8601 时间；30 天期限只根据 `checked_at` 判断。当前快照缺少可信核对时间，业务 skill 必须先要求刷新。
+- `checked_at` 由刷新 skill 在成功核对在线页面后写入 UTC ISO 8601 时间。本业务 skill 不校验快照版本或是否过期；需要更新时由用户手动调用 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md)。
 - 在线 Wiki 与本地内容的差异只由刷新 skill 展示和处理；本业务 skill 不访问在线 Wiki、不刷新规则、不修改本文件。
 
 本文件只摘录“处理任务要求”和相关标签定义中与本 skill 直接相关的规则，不替代在线页面；在线页面只由刷新 skill 读取。
@@ -80,11 +80,8 @@
 
 结论中的原因、方案和影响范围以 issue 内容、现有字段语境、本地 Git 提交、提交 diff、Gerrit change 和 patch 为依据。范围涉及通用需求或通用问题时，结论说明已核实的分支、项目、模块、系统或芯片范围；范围尚未建立时，使用准确的待确认表述。
 
-## 快照使用与刷新
+## 快照使用
 
-正常执行只读取本地规则快照。业务 skill 不访问在线 Wiki，也不根据 issue 特殊情况自行刷新或修改本文件。
-- 快照不存在、元数据无效、`checked_at` 无法解析或 `checked_at` 距当前 UTC 时间超过 30 天：停止并要求用户调用 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md)。
-- 刷新事务标记 `refresh-bu1-sdk-rules/.refresh.pending` 存在：停止，等待刷新完成或按刷新 skill 的异常恢复流程处理。
-- 刷新失败但旧快照完整且用户明确回复本次使用旧快照：可以继续，必须在草稿和最终报告中披露 `checked_at` 和旧快照状态。
-- 规则内容未覆盖当前场景：停止并要求先刷新或由用户提供明确规则，不在线补齐、不自行发明格式。
+正常执行只读取本地规则快照。业务 skill 不访问在线 Wiki，也不根据 issue 特殊情况自行刷新或修改本文件。快照版本与是否过期不由本 skill 检查；需要更新时由用户手动调用 [refresh-bu1-sdk-rules](../../refresh-bu1-sdk-rules/SKILL.md)。
+- 规则内容未覆盖当前场景：停止并由用户提供明确规则，不在线补齐、不自行发明格式。
 - 刷新成功后由刷新 skill 更新本文件的规则内容和元数据；本 skill 不执行更新。

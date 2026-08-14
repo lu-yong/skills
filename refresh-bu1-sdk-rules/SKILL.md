@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Refresh BU1-SDK Rules
 
-这是唯一负责在线读取并维护 BU1-SDK 本地规则快照的 skill。`commit-bu1-sdk-gerrit` 和 `update-bu1-sdk-issue-conclusion` 在业务执行期间只读取本地快照，不访问在线 Wiki，也不修改 reference 文件。
+这是唯一负责在线读取并维护 BU1-SDK 本地规则快照的 skill。`commit-bu1-sdk-gerrit` 和 `update-bu1-sdk-issue-conclusion` 在业务执行期间只读取本地快照，不访问在线 Wiki，不修改 reference 文件，也不检查快照版本、是否过期或刷新事务。需要更新时由用户手动调用本 skill。
 
 ## 规则来源
 
@@ -62,13 +62,13 @@ disable-model-invocation: true
    ```
    只把 questionnaire 返回的结构化 `details.answers` 中 `id` 为 `refresh_decision` 且 `value` 为 `confirm` 视为明确确认；`cancel`、用户取消 questionnaire、缺少/无法解析该答案都不得写入 reference。不要使用 `qna` 扩展生成的 Q&A 汇总，也不要把 questionnaire 之外的“好的”“确认”等模糊自然语言回复当作确认。用户要求修改规则内容、只更新其中一个页面或拒绝刷新时，删除 staging 和事务标记，原文件保持不变；若工具返回无效结果，应重新调用同一个 questionnaire。
 7. **完整校验后替换。** 确认后再次校验两个候选文件都存在、元数据完整、内容非空且 staging 路径属于本次事务。将两个候选文件分别复制为各自目标 reference 所在目录中的临时文件，临时文件名必须包含本次事务 ID；分别校验临时文件内容和 hash 与候选一致。两个临时文件都校验成功后，再分别使用原子 rename 替换两个 reference。两次 rename 不是跨文件整体原子操作，因此必须保留事务标记，直到两个 reference 都替换成功且重新读取校验通过。任一临时文件复制、校验、rename 或最终复核失败，都必须停止并报告，不得声称刷新完成；若只完成了一个 rename，保留事务标记，按事务记录和 hash 进行人工恢复，不得静默接受半更新状态。
-8. **清理并报告。** 只有两个 reference 都替换成功且重新读取校验通过后，才删除 staging 和 `.refresh.pending`。最终报告两个页面的 source version、source updated time、checked_at、checked_by 和是否存在规则差异。清理失败时报告“刷新已写入但事务清理未完成”，业务 skill 会因事务标记停止。
+8. **清理并报告。** 只有两个 reference 都替换成功且重新读取校验通过后，才删除 staging 和 `.refresh.pending`。最终报告两个页面的 source version、source updated time、checked_at、checked_by 和是否存在规则差异。清理失败时报告“刷新已写入但事务清理未完成”；业务 skill 不会因事务标记停止，但用户应完成清理后再重新调用本 skill。
 
 ## 异常恢复
 
 - 页面读取、校验、差异确认或写入失败：原有快照不变；能安全清理时删除本次 staging 和标记。
-- 进程中断导致 `.refresh.pending` 保留：后续业务 skill 必须停止。用户应检查标记中的 staging 路径和候选 hash，确认没有写入 reference 后删除 staging 和标记，再重新调用本 skill；不得直接删除未检查的标记。
+- 进程中断导致 `.refresh.pending` 保留：业务 skill 不会因此停止。用户应检查标记中的 staging 路径和候选 hash，确认没有写入 reference 后删除 staging 和标记，再重新调用本 skill；不得直接删除未检查的标记。
 - 发现两个 reference 只有一个已替换：保留事务标记，比较两份文件的元数据和 hash；恢复到替换前快照或完成另一份替换都必须是明确的人工维护动作，业务 skill 不参与恢复。
-- 刷新失败但旧快照存在：业务 skill 可以在用户明确接受的前提下继续使用旧快照，并披露其 `checked_at`；旧快照不存在或元数据无效时，业务 skill 必须停止。
+- 刷新失败但旧快照存在：业务 skill 继续按原样读取本地快照，不校验版本或是否过期，也不要求用户接受旧快照。快照缺失或不可读时，业务 skill 无法应用规则。
 
 本 skill 不执行 `git add`、`git commit`、`git push` 或 Redmine issue 更新。在线 Wiki 是刷新时的来源，本地快照是两个业务 skill 执行时的唯一规则来源。
