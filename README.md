@@ -50,6 +50,7 @@
 - `wayfinder` — 把超出单次会话容量的大工程规划成 tracker 上的决策工单。
 - `to-tickets` — 把计划或当前对话拆成带阻塞关系的 tracer-bullet 工单。
 - `handoff` — 把当前对话压缩成交接文档给下一个会话。
+- `herdr` — 控制 Herdr 的 workspace、tab、pane，协调 Agent，并在其他 pane 中运行命令（要求当前 Agent 运行在 Herdr pane 内）。
 
 **Android 相关**
 
