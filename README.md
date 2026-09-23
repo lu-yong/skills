@@ -9,7 +9,7 @@
 **不要直接复制进你的 skill 目录就开用。** 组内各人用的 Agent 工具不同，这些技能是在我的环境下写和调试的——我主要用 pi，有时用 Codex 和 Claude Code，偶尔用 OpenCode，技能格式沿用 Claude Code 的 `SKILL.md` 约定；日常开发在公司的 Ubuntu 环境，也有部分在我个人的 macOS 上。你的工具和系统组合大概率跟我不同，里面存在三类需要适配的东西：
 
 1. **技能加载机制不同。** 这些技能用的是 Claude Code 式的 `SKILL.md` frontmatter（如 `disable-model-invocation: true` 表示只能手动 `/技能名` 触发）；pi / Codex / OpenCode 等工具的技能发现方式和字段支持各不一样，可能需要改放置目录或在 AGENTS.md 里挂路由（仓库里的 `install-openspec-superpowers-bridge` 就是干这个的一个例子）。
-2. **环境绑定的内容。** `commit-gerrit`、`gerrit`、`redmine`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 依赖公司 Gerrit / Redmine 的地址和你个人的认证凭据；个别技能里可能残留我机器上的绝对路径，macOS 与 Ubuntu 的命令差异（如 `sed`、`open` 等）也要留意。
+2. **环境绑定的内容。** `commit-gerrit`、`gerrit`、`redmine`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 依赖公司 Gerrit / Redmine 的地址和你个人的认证凭据；个别技能里可能残留我机器上的绝对路径，macOS 与 Ubuntu 的命令差异（如 `sed`、`open` 等）也要留意。另外，`commit-gerrit`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 的所有确认闸门都要求宿主提供 `ask_user_question` 结构化提问工具（我的 pi 环境通过扩展提供），宿主没有这个工具时技能会直接停下报告，不会降级成自然语言确认。
 3. **技能之间的交叉引用。** 例如 `humanize-tech-docs` 会引用 `domain-modeling`，`improve-codebase-architecture` 会用到 `codebase-design` 的词汇表。拆开单拿一个技能时，要么把被引用的一起拿走，要么让 Agent 知道缺了哪个。
 
 所以推荐的做法是，把仓库丢给你自己的 Agent，说一句类似：
