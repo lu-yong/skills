@@ -34,7 +34,7 @@
 **想做设计、评审、写代码**
 
 - `codebase-design` — 深模块设计的共享词汇；其他设计类技能的基础。
-- `grilling` / `grill-with-docs` — 让 Agent 对你的方案穷追猛打地提问；后者边问边沉淀 ADR 和术语表。
+- `grilling` / `grill-with-docs` — 把你的方案拆成决策树，按轮次穷追猛打地提问：每轮一次性问完所有不再依赖未决答案的问题，每题附推荐答案，能自己查的事实不问你；后者边问边沉淀 ADR 和术语表。
 - `improve-codebase-architecture` — 扫描代码库找可深化的模块，出 HTML 报告。
 - `code-review` — 从规格、设计规范、安全可靠性三条独立轴评审改动。
 - `tdd` — 测试驱动开发流程。
