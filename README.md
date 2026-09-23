@@ -10,7 +10,7 @@
 
 1. **技能加载机制不同。** 这些技能用的是 Claude Code 式的 `SKILL.md` frontmatter（如 `disable-model-invocation: true` 表示只能手动 `/技能名` 触发）；pi / Codex / OpenCode 等工具的技能发现方式和字段支持各不一样，可能需要改放置目录或在 AGENTS.md 里挂路由（仓库里的 `install-openspec-superpowers-bridge` 就是干这个的一个例子）。
 2. **环境绑定的内容。** `commit-gerrit`、`gerrit`、`redmine`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 依赖公司 Gerrit / Redmine 的地址和你个人的认证凭据；个别技能里可能残留我机器上的绝对路径，macOS 与 Ubuntu 的命令差异（如 `sed`、`open` 等）也要留意。另外，`commit-gerrit`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 的所有确认闸门都要求宿主提供 `ask_user_question` 结构化提问工具（我的 pi 环境通过扩展提供），宿主没有这个工具时技能会直接停下报告，不会降级成自然语言确认。
-3. **技能之间的交叉引用。** 例如 `humanize-tech-docs` 会引用 `domain-modeling`，`improve-codebase-architecture` 会用到 `codebase-design` 的词汇表。拆开单拿一个技能时，要么把被引用的一起拿走，要么让 Agent 知道缺了哪个。
+2. **环境绑定的内容。** `commit-gerrit`、`gerrit`、`redmine`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 依赖公司 Gerrit / Redmine 的地址和你个人的认证凭据；个别技能里可能残留我机器上的绝对路径，macOS 与 Ubuntu 的命令差异（如 `sed`、`open` 等）也要留意。另外，`commit-gerrit`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 是门禁技能：所有确认闸门都要求宿主提供 `ask_user_question` 结构化提问工具（我的 pi 环境通过扩展提供），宿主没有这个工具时技能会直接停下报告，不会降级成自然语言确认；`grilling` 这类对话技能则降级为 markdown 提问（判定标准见 `docs/adr/0001-gate-skills-never-degrade.md`）。
 
 所以推荐的做法是，把仓库丢给你自己的 Agent，说一句类似：
 
@@ -35,7 +35,7 @@
 
 - `codebase-design` — 深模块设计的共享词汇；其他设计类技能的基础。
 - `grilling` / `grill-with-docs` — 把你的方案拆成决策树，按轮次穷追猛打地提问：每轮一次性问完所有不再依赖未决答案的问题，每题附推荐答案，能自己查的事实不问你；后者边问边沉淀 ADR 和术语表。
-- `improve-codebase-architecture` — 扫描代码库找可深化的模块，出 HTML 报告。
+- `grilling` / `grill-with-docs` — 把你的方案拆成决策树，按轮次穷追猛打地提问：每轮至多四题、优先问解锁最多的，宿主有 `ask_user_question` 时走结构化问卷、没有则降级为 markdown，每题附推荐答案，能自己查的事实不问你；后者边问边沉淀 ADR 和术语表。
 - `code-review` — 从规格、设计规范、安全可靠性三条独立轴评审改动。
 - `tdd` — 测试驱动开发流程。
 - `prototype` — 快速搭一次性原型验证状态模型或 UI 方向。
