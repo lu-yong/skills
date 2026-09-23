@@ -5,9 +5,23 @@ description: Grill the user relentlessly about a plan, decision, or idea. Use wh
 
 Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
 
-Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
+Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the frontier in rounds of **at most four questions**, ranked by how many downstream decisions they unlock; the rest of a larger frontier waits for the next round. Then wait for the user's answers before the next round.
 
-Format a round like so:
+## Asking a round
+
+This is a conversation skill: its answers steer the conversation and authorize nothing, so when the host provides a structured question tool (pi's `ask_user_question`), ask every round through it, and degrade to plain text when it is unavailable or fails.
+
+**Through the tool, one round = one call:**
+
+- At most one markdown sentence before the call, recapping what the previous round settled; the questions themselves live only in the call.
+- Keep each question body to a few sentences; put the background and trade-offs into the option `description`s. A question that will not fit is several questions: split it.
+- Recommended answer: the first option, its label suffixed `(Recommended)`.
+- An open question with no natural candidates gets your hypotheses as the options — the options are hypotheses, not a menu, so expect the real answer through the free-form row and treat a typed answer as first-class.
+- Use multi-select when several answers can hold at once.
+- A cancelled questionnaire is a pause signal, never answers: drop to plain chat and ask what is wrong (too many questions? wrong direction? missing context?), then resume rounds. Two consecutive cancellations: offer to close the session and summarize the state of the tree.
+- Treat a clicked answer as a seed, not a conclusion: when the branch it settles is expensive to reverse, keep drilling into it in later rounds.
+
+**When the tool is missing from the tool list, or a call returns an error** (`no_ui`, `no_custom_ui`, `details.error`), ask that round in plain text instead, numbering each question and stating your recommended answer:
 
 ```
 ❓ **Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
