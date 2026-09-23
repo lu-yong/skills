@@ -61,6 +61,7 @@
 **维护技能本身 / 跨工具桥接**
 
 - `writing-great-skills` — 写技能的参考规范；改这个仓库里的技能前先看它。
+- `install-openspec-aosp-repo` — 往当前仓库安装/升级 OpenSpec 的 `aosp-repo` schema（来自 `lu-yong/openspec-schemas`），并把 `openspec/config.yaml` 的 `schema:` 指向它；升级前先展示 diff。
 - `install-openspec-superpowers-bridge` — 在 Codex/OpenCode 里桥接 OpenSpec 与 Superpowers。
 - `openspec-language-config` — 配置 OpenSpec 用指定自然语言产出文档。
 
