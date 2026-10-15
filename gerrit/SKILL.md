@@ -1,22 +1,23 @@
 ---
 name: gerrit
-description: Read-only workflows for querying Nationalchip Gerrit REST APIs, including change details, revisions, patches, changed files, projects, account information, and pagination. Use when the user asks to fetch, inspect, or summarize a Gerrit change or patch from git.nationalchip.com/gerrit or gerrit.nationalchip.com.
+description: Read-only workflows for querying Nationalchip Gerrit REST APIs, including change details, revisions, patches, changed files, projects, account information, and pagination. Use when the user asks to fetch, inspect, or summarize a Gerrit change or patch from git.nationalchip.com/gerrit, git2.nationalchip.com/gerrit, or gerrit.nationalchip.com.
 ---
 
 # Gerrit
 
-Use this skill for read-only requests to the two Nationalchip Gerrit instances. Do not use it for creating reviews, comments, approvals, or other writes unless the user explicitly asks for a separate workflow.
+Use this skill for read-only requests to the three Nationalchip Gerrit instances. Do not use it for creating reviews, comments, approvals, or other writes unless the user explicitly asks for a separate workflow.
 
 ## Instances
 
-The two instances are not synchronized and their change numbers are independent. Confirm the target instance when the user does not identify it.
+The three instances are not synchronized and their change numbers are independent. Confirm the target instance when the user does not identify it.
 
 | Instance | API base URL | Authentication | TLS |
 | --- | --- | --- | --- |
 | Internal | `https://git.nationalchip.com/gerrit/a` | HTTP Digest | Verify the certificate normally |
+| Git2 internal | `https://git2.nationalchip.com/gerrit/a` | HTTP Basic | Verify the certificate normally |
 | External | `https://gerrit.nationalchip.com/a` | HTTP Basic | The legacy certificate may require `--insecure` |
 
-The `/a/` prefix is used for authenticated REST requests. A change identifier can be a number or a full Gerrit change ID such as `project~branch~I...`.
+The `/a/` prefix is used for authenticated REST requests. A change identifier can be a number or a full Gerrit change ID such as `project~branch~I...`. The examples below use the Internal instance; for Git2 internal, send the same requests to `https://git2.nationalchip.com/gerrit/a/...` with plain `--netrc-file` (no `--digest`).
 
 ## Credentials
 
@@ -45,6 +46,14 @@ External request:
 curl --netrc-file "$NETRC_FILE" \
   --fail --silent --show-error --insecure \
   'https://gerrit.nationalchip.com/a/accounts/self'
+```
+
+Git2 internal request (plain `--netrc-file`, no `--digest`):
+
+```bash
+curl --netrc-file "$NETRC_FILE" \
+  --fail --silent --show-error \
+  'https://git2.nationalchip.com/gerrit/a/accounts/self'
 ```
 
 Only use `--insecure` for the external legacy endpoint when normal certificate verification fails. Do not broaden it to other hosts or hide the TLS warning from the user.
@@ -94,7 +103,7 @@ def get_change_detail(change_id: str):
     return json.loads(text)
 ```
 
-The Python example assumes `change_id` is provided by the caller. For the external instance, use Basic Auth and make the TLS decision explicit with `verify=True` first; use `verify=False` only for the documented legacy certificate problem and report that choice.
+The Python example assumes `change_id` is provided by the caller. For the Git2 internal and external instances, use Basic Auth (pass `auth=(username, password)` as a plain tuple); for the external one, make the TLS decision explicit with `verify=True` first; use `verify=False` only for the documented legacy certificate problem and report that choice.
 
 ## Common read-only endpoints
 
