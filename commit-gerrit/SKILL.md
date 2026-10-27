@@ -78,7 +78,7 @@ fi
 test -n "$push_url" || { printf '%s\n' 'commit-gerrit 已停止：当前 remote 的推送 URL 为空。请先配置 remote 后重新调用 skill。' >&2; exit 1; }
 remote_host=$(printf '%s\n' "$push_url" | sed -E 's#^[^:]+://([^@/]+@)?([^/:]+).*#\2#; s#^[^@]+@([^:]+):.*#\1#')
 case "$remote_host" in
-  git.nationalchip.com|gerrit.nationalchip.com) ;;
+  git.nationalchip.com|gerrit.nationalchip.com|192.168.110.229) ;;
   *) printf '%s\n' 'commit-gerrit 已停止：push URL host 不是允许的公司 Gerrit host。请先确认 remote 配置后重新调用 skill。' >&2; exit 1 ;;
 esac
 git ls-remote --exit-code --heads "$push_url" "refs/heads/$dest_branch" >/dev/null || { printf '%s\n' 'commit-gerrit 已停止：Gerrit 目标分支尚未创建或当前 push URL 无法访问。请先确认目标分支和 push URL 后重新调用 skill。' >&2; exit 1; }
