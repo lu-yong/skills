@@ -101,7 +101,7 @@ When any check above fails, end this skill invocation immediately: do not read R
    - `git branch --show-current`
    - the current branch's remote, merge config, and push URL.
    The default scope must list every path that would be committed, including deleted, modified, added, and staged paths. For untracked files, read only what is necessary to check whether they are sensitive files, build artifacts, or unrelated content; do not output file contents or credentials to the user. Record the fixed fields of the state collection per the Fixed Workspace Snapshot Format.
-4. Inspect the full change against the `HEAD` baseline: use `git diff --binary HEAD` for staged and unstaged changes; check untracked files separately. Generate and record the complete snapshot per the Fixed Workspace Snapshot Format; the snapshot records only paths, types, sizes, and hashes, never file contents or credentials. When the user explicitly specified a scope:
+4. Inspect the full change against the `HEAD` baseline: use `git diff --binary HEAD` for staged and unstaged changes; check untracked files separately. Generate and record the complete snapshot per the Fixed Workspace Snapshot Format once the confirmed scope is fixed (with a user-specified scope, run the scope checks below first and regenerate the snapshot after any `扩展提交范围` expansion); the snapshot records only paths, types, sizes, and hashes, never file contents or credentials. When the user explicitly specified a scope:
    - First read the index paths that existed before the skill was invoked with NUL-safe `git diff --cached --name-only -z` and compare the complete path set against `confirmed-paths`; cover modified, added, deleted, renamed, and space-containing paths.
    - When any pre-existing staged path is outside the confirmed scope, show the paths, scope, and blocker, then call `ask_user_question` with one question whose `header` is `提交范围`, whose `question` asks whether the displayed staged paths should be included in this patch, and whose two options are `扩展提交范围` (`description`: include them, regenerate the complete draft, and obtain a fresh `提交确认` answer) and `自行处理暂存区` (`description`: stop without changing the index so the user can adjust the staging area). Continue only when `details.error` is absent, `details.cancelled` is `false`, and an `answers` entry whose `question` equals this call's `question` text has `kind: "option"` and `answer` exactly `扩展提交范围`. An `answer` of `自行处理暂存区`, or `details.cancelled: true` with no `details.error`, stops; a missing entry, `kind: "custom"`, or a mismatched label repeats the same call unchanged; a `details.error` is handled per the contract's error rules and never repeats the call unchanged. Never run `git restore --staged` or silently alter the user's index.
    - When no out-of-scope paths exist, confirm every in-scope path is present in the snapshot, and record the scope, the pre-existing staged paths, and the paths to be added separately in the draft.
@@ -160,14 +160,16 @@ When any check above fails, end this skill invocation immediately: do not read R
 
 Phase 1 generates the fixed-field snapshot once and records it in the draft; Phase 2 regenerates it in the same format before `git add` and compares field by field. Any field change invalidates the Phase 1 `提交确认` answer and requires regenerating the draft and issuing the `提交确认` question again.
 
+Content fields are computed over the **confirmed scope**: with the default scope that is the entire worktree, so every worktree change is in scope; with a user-specified scope they cover only `confirmed-paths` (as expanded through the `提交范围` gate). A change outside the confirmed scope alters no recorded field, never enters the commit, and does not invalidate the confirmation. The staged index, `HEAD`, branch/remote/target configuration, and the `commit-msg` hook are always compared in full: the commit takes the whole index, and it is created and pushed through that configuration.
+
 Fixed fields and their generation:
 
 | Field | Generation method |
 | --- | --- |
 | `HEAD` SHA | the full 40-character SHA of `git rev-parse HEAD` |
-| Worktree change hash | SHA-256 of the `git diff --binary HEAD` output |
-| Staged change hash | SHA-256 of the `git diff --cached --binary` output |
-| Untracked-file hash | one `path|type|size|content-SHA-256` line per path listed by `git ls-files --others --exclude-standard -z`, sorted by path, then one more SHA-256 over the whole list |
+| Worktree change hash | SHA-256 of the `git diff --binary HEAD` output over the confirmed scope (`git diff --binary HEAD -- <confirmed-paths>` with a user-specified scope) |
+| Staged change hash | SHA-256 of the `git diff --cached --binary` output over the whole index, whatever the scope: the commit takes the whole index |
+| Untracked-file hash | one `path|type|size|content-SHA-256` line per in-scope path listed by `git ls-files --others --exclude-standard -z` (append `-- <confirmed-paths>` with a user-specified scope), sorted by path, then one more SHA-256 over the whole list |
 | Current branch | `git branch --show-current` |
 | Merge config | the normalized value of `git config --get branch.<local_branch>.merge` |
 | Remote name | `git config --get branch.<local_branch>.remote` |
@@ -176,7 +178,7 @@ Fixed fields and their generation:
 | Hook path | `git rev-parse --git-path hooks/commit-msg` (the Git-resolved path when `core.hooksPath` is set) |
 | Hook hash | SHA-256 of the `commit-msg` hook file |
 
-Generation example (use `shasum -a 256` on macOS and `sha256sum` on Linux for SHA-256):
+Generation example (use `shasum -a 256` on macOS and `sha256sum` on Linux for SHA-256; with a user-specified scope, append `-- <confirmed-paths>` to the two `git diff` commands and to `git ls-files`):
 
 ```bash
 git rev-parse HEAD
@@ -190,14 +192,15 @@ done | sort | shasum -a 256
 
 Rules:
 
-- The snapshot records only paths, types, sizes, and hashes; it never records or outputs untracked-file contents, diff contents, hook contents, credentials, or any secret; when content, `HEAD`, remote, hook, or untracked files change without a filename change, the corresponding hash or field value differs and must be discoverable.
+- The snapshot records only paths, types, sizes, and hashes; it never records or outputs untracked-file contents, diff contents, hook contents, credentials, or any secret; when in-scope content, `HEAD`, remote, hook, or in-scope untracked files change without a filename change, the corresponding hash or field value differs and must be discoverable.
 - Record untracked files one per line as `path|type|size|content-SHA-256`, sorted by path so they are comparable; type is only `file`/`symlink` and size is in bytes.
+- Out-of-scope worktree and untracked changes are not recorded and invalidate nothing; any staged change is always in scope, because the commit takes the whole index.
 - Phase 2 regenerates every field before `git add` and compares each against Phase 1: stop immediately when any field is missing, ungeneratable, or different; re-run Phase 1 to generate a new draft and issue the `提交确认` question again; continue to `git add` only when every field matches.
 
 ## Phase 2: Stage After ask_user_question Confirmation
 
 1. Accept only a `提交确认` answer entry with `kind: "option"` and `answer` exactly `确认提交`, obtained for the complete Phase 1 draft with `details.error` absent, `details.cancelled: false`, and a `question` equal to the `提交确认` call's `question` text. An `answer` of `修改草稿` starts revised checks and a fresh call; an `answer` of `取消提交` ends the flow. `details.cancelled: true` with no `details.error` ends the flow; a missing entry, `kind: "custom"`, or a mismatched label re-issues the same call unchanged; a `details.error` is handled per the contract's error rules; natural-language replies and `details.globalNote` do not authorize staging. When the user changes the issue number, scope, message, or any rule-related content, re-run the affected checks, show a new draft, and obtain a fresh structured confirmation.
-2. Before running `git add`, regenerate every snapshot field per the Fixed Workspace Snapshot Format and compare each against the Phase 1 record. Any field change (`HEAD`, worktree or staged diff hash, untracked files, branch, merge config, remote name, push URL, target branch, `commit-msg` hook path or hash) invalidates the Phase 1 confirmation: stop, re-run Phase 1 to generate a new draft, and issue the `提交确认` question again; never silently fold changes produced after confirmation into the commit.
+2. Before running `git add`, regenerate every snapshot field per the Fixed Workspace Snapshot Format and compare each against the Phase 1 record. Any field change (`HEAD`, worktree or staged diff hash, untracked files, branch, merge config, remote name, push URL, target branch, `commit-msg` hook path or hash) invalidates the Phase 1 confirmation: stop, re-run Phase 1 to generate a new draft, and issue the `提交确认` question again; never silently fold changes produced after confirmation into the commit. A workspace change outside the confirmed scope alters no recorded field and does not invalidate, because it never enters the commit.
 3. Run `git add` only after confirming the snapshot is unchanged:
    - Default scope: run `git add -A -- .` at the repository root.
    - User-specified scope: run `git add -A -- <confirmed-paths>` only on the confirmed paths, handling deletions and space-containing paths correctly.
