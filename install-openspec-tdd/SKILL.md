@@ -27,8 +27,7 @@ license: MIT
 ## Commands
 
 Run from the repository root unless the user provides another target. First set
-`SKILL_DIR` to the absolute directory containing this loaded `SKILL.md`; do not assume
-the skill is installed inside the repository:
+`SKILL_DIR` to the absolute directory containing this `SKILL.md`. Keep the checkout or symlink the skill directory so the wrapper can find the [shared installer](../scripts/install-openspec-schema.sh).
 
 ```bash
 "${SKILL_DIR:?set SKILL_DIR to the directory containing this SKILL.md}/scripts/install_tdd_spec.sh" --mode install --project-root "$PWD"
@@ -75,4 +74,4 @@ Useful flags:
 ## Validation Notes
 
 - If `openspec` is unavailable, still install the files and report validation was skipped.
-- Validate with `openspec schema validate tdd-spec` and confirm with `openspec schemas`.
+- The installer runs `openspec schema validate tdd-spec` and `openspec schemas` before switching config. A validation failure restores the previous schema directory.

@@ -10,67 +10,35 @@ disable-model-invocation: true
 
 ## 规则来源
 
-使用可用的 **Redmine** skill 完成认证、API 调用、TLS、XSSI 和秘密处理。不得输出 API key、Authorization header、netrc 内容或完整认证响应。
+执行器通过 [Redmine CLI](../redmine/SKILL.md) 读取 Wiki，沿用它的请求头认证和凭据配置。
 
 必须读取以下三个 API 页面，并从每个响应的 `wiki_page` 中取得 `text`、`version` 和 `updated_on`：
 - `GET /projects/bu1-sdk/wiki/Gerrit%E4%BD%BF%E7%94%A8%E8%A7%84%E5%88%99.json`
 - `GET /projects/bu1-sdk/wiki/Gerrit%E8%A1%A5%E4%B8%81%E7%94%9F%E6%88%90%E7%BB%86%E5%88%99.json`
 - `GET /projects/bu1-sdk/wiki/Redmine%E4%BD%BF%E7%94%A8%E8%A7%84%E5%88%99.json`
 
-一次刷新必须完整成功读取这三个页面。前两个页面的规则共同组成 `commit-gerrit` 的快照，第三个页面组成 `update-issue-conclusion` 的快照。刷新时应保留本地 reference 的规则摘录结构，并同步每个来源页面的版本、更新时间和核对元数据；不要把 API key 或原始认证响应写入文件。
+一次刷新必须完整成功读取这三个页面。前两个页面的规则共同组成 `commit-gerrit` 的快照，第三个页面组成 `update-issue-conclusion` 的快照。刷新时保留本地 reference 的规则摘录结构，并同步每个来源页面的版本、更新时间和核对元数据；不要把 API key 或原始认证响应写入文件。
 
 ## 刷新流程
 
-1. **确认用户意图。** 该 skill 只在用户明确要求刷新规则，或由用户明确配置的外部调度器调用时运行。skill 不依赖模型自唤醒实现定时器。展示当前本地快照版本和 `checked_at`；外部调度器也必须保留本 skill 的确认和失败策略。开始前先确认 `ask_user_question` 出现在当前可用工具列表中：没有交互 UI 的宿主会把该工具整个从工具列表摘除，调度运行同样如此。工具不可用时立即停止并报告本 skill 需要交互式宿主，不创建事务标记、不写临时文件、不读取在线页面、不修改任何 reference，也不得改用自然语言确认。
-2. **检查刷新事务。** 以 `refresh-bu1-sdk-rules/.refresh.pending` 作为事务标记。若标记已经存在，说明上一次刷新可能中断：停止并按“异常恢复”一节处理，不得覆盖、删除标记或直接重跑。开始刷新前创建该标记，在其中记录开始时间、两个目标 reference 的路径及各自的替换前 SHA-256，不记录凭据。标记只让中断状态可见、可判定，不会阻止业务 skill 读取 reference。
-3. **读取全部页面。** 一次刷新必须成功读取并基本校验所需的全部 Wiki API 页面：HTTP/API 成功、`wiki_page.text` 非空、`version` 是正整数、`updated_on` 是可解析的 UTC 时间。任一页面失败时删除本次临时文件和事务标记，保留所有原有 reference，并报告失败原因。
-4. **生成候选快照。** 在每个目标 reference 所在目录写入候选临时文件 `<reference 文件名>.tmp-<UTC 时间戳>`。候选文件必须保留原有规则内容，并包含以下元数据：
+本 skill 的执行器是 `scripts/refresh.py`，子命令 `plan` / `apply` / `abort` / `status`。它经 **Redmine** skill 的 CLI（`redmine/scripts/redmine.py`，可用 `REDMINE_CLI` 覆盖路径）完成认证和在线读取；秘密处理遵守该 skill 的要求。写入授权走共享确认门禁：宿主协议、凭据状态目录、TTL 和执行边界见 [confirm-gate/README.md](../confirm-gate/README.md)。
 
-   ```text
-   source_version: <每个来源页面的 name=version 映射；Gerrit 快照记录两个页面>
-   source_updated_on: <每个来源页面的 name=updated_on 映射>
-   checked_at: <当前 UTC ISO 8601 时间>
-   checked_by: <当前执行者标识>
-   ```
-
-   `checked_at` 是本次成功读取并核对在线页面的时间，不能用文件 mtime 或 `source_updated_on` 代替。写完立即重新读取每个临时文件，与刚生成的候选内容逐字一致（或 SHA-256 一致）才算写入成功；不一致时按失败处理。
-5. **比较并展示差异。** 将每个临时文件与其对应的本地 reference 分别比较。展示来源版本、核对时间和规则正文的摘要差异；不得展示凭据。即使规则正文没有差异，也要说明只会更新核对元数据。
-6. **使用 ask_user_question 等待明确确认。** 候选快照和差异展示完毕后，不要只输出文字提示并等待自然语言回复；调用 `ask_user_question` 工具展示一个单选确认框：
-   ```json
-   {
-     "questions": [
-       {
-         "header": "刷新确认",
-         "question": "是否用本次读取到的两个候选快照替换本地规则快照？",
-         "options": [
-           {
-             "label": "确认刷新规则",
-             "description": "接受本次两个候选快照（包括核对元数据）并继续原子替换。"
-           },
-           {
-             "label": "保留现有快照",
-             "description": "不替换任何 reference；删除本次临时文件和事务标记，原有快照保持不变。"
-           }
-         ]
-       }
-     ]
-   }
-   ```
-   `保留现有快照` 是显式的拒绝选项：它是记录得下的用户决定；`Esc` 由工具本身处理并返回 `details.cancelled: true`，是中断通道而不是拒绝。两者都不写入 reference，但最终报告必须区分二者。本次调用只有一个问题，`questionIndex` 恒为 `0`，不具区分力；按 `answers[].question` 与本次发出的 `question` 文本精确相等定位条目，且只接受本次调用返回的结果，丢弃更早调用的结果。
-
-   **先判 `details.error`。** 工具的所有错误返回都同时带 `cancelled: true` 和空的 `answers` 数组，因此错误永远不是用户决定，不得当作用户取消或拒绝上报，也绝不能原样重发同一个调用——同样的调用只会复现同样的错误，而对话框根本没有渲染，用户连 `Esc` 都按不了。
-   - 作者错误（`reserved_label`、`duplicate_option_label`、`empty_options`、`too_many_questions`、`duplicate_question`）说明本 skill 构造了非法问题：修正问题本身（改掉冲突的 `label`、修正选项数量）后发出修正过的调用；连续 2 次修正仍失败就停止并报告，删除本次临时文件和事务标记，原有 reference 保持不变。
-   - 宿主错误（`no_ui`、`no_custom_ui`、`session_load_failed`、`stale_module_cache`）说明问题根本没有展示给用户：停止并报告本 skill 需要交互式宿主，删除本次临时文件和事务标记，原有 reference 保持不变。不得声称用户取消，不得改用自然语言确认，也不得继续替换。
-
-   **`details.error` 不存在时。** 只把 `details.cancelled` 为 `false`、且 `details.answers` 中存在 `question` 恰好等于本次 `question` 文本、`kind` 恰好为 `option`、`answer` 恰好等于 `确认刷新规则` 的条目视为明确确认。`保留现有快照`、`details.cancelled: true`、缺少该条目、`kind` 为 `custom`（用户自己敲入的自由文本，永不构成授权）、`answer` 与选项标签不符，都不得写入 reference。用户可以只提交一个全局备注、一个选项都不选，此时 `details.cancelled` 仍为 `false` 且工具返回的散文仍读作“已回答”；因此绝不能凭散文文本或“未取消”判断，必须按上述条件校验 `answers` 条目。`details.globalNote` 和 `answers[].notes` 只是上下文，永远不构成确认。每个问题都会自动追加一行 `Type something.` 且无法关闭，自由文本始终可达但永不授权。不要使用 `qna` 扩展生成的 Q&A 汇总，也不要把工具之外的“好的”“确认”等模糊自然语言回复当作确认。用户选择 `保留现有快照`、按 `Esc` 取消、要求修改规则内容、只更新其中一个页面或拒绝刷新时，删除临时文件和事务标记，原文件保持不变；结果无效（缺少条目、`kind` 为 `custom`、`answer` 与本次发出的选项标签不符）时原样重新调用同一个 `ask_user_question`。记录匹配到的 `question`、`answer` 标签和 `header`，不记录凭据。
-7. **逐个原子替换。** 确认后，对每个临时文件：重新读取并确认其内容与展示给用户确认的候选内容一致、元数据完整且非空，然后用 `mv`（rename）在同一目录内原子替换对应 reference。同一目录内的 rename 是原子的；两个 reference 之间没有跨文件原子性，因此事务标记必须保留到两个 reference 都替换成功且重新读取校验通过。任一校验、替换或最终复核失败，立即停止并报告，不得声称刷新完成；若只完成了一个替换，保留事务标记，按“异常恢复”一节处理，不得静默接受半更新状态。
-8. **清理并报告。** 只有两个 reference 都替换成功且重新读取校验通过后，才删除残留临时文件和 `.refresh.pending`。最终报告两个页面的 source version、source updated time、checked_at、checked_by 和是否存在规则差异。清理失败时报告“刷新已写入但事务清理未完成”；业务 skill 不会因事务标记停止，但用户应完成清理后再重新调用本 skill。
+1. **确认用户意图。** 本 skill 只在用户明确要求刷新规则，或由用户明确配置的外部调度器调用时运行，不依赖模型自唤醒实现定时器。展示当前本地快照版本和 `checked_at`；外部调度器也必须保留本 skill 的确认和失败策略。
+2. **plan。** 先检查交互宿主是否提供 `confirm_gate`，再运行 `python3 scripts/refresh.py plan`（从本技能目录运行）。执行器检查门禁状态目录，并校验三个页面都有正文、正整数版本和带明确 UTC 时区的更新时间。随后原子写入事务标记 `.refresh.pending`，记录目标路径和替换前及候选的 SHA-256，再在各 reference 同目录写入 `<reference>.tmp-<UTC 时间戳>` 并登记 `action_id`。计划输出包括
+   - 每个页面的版本、更新时间和在线全文 `pages[].text`——规则正文是人工摘录，审阅以在线全文为准；
+   - 每个快照的 `diff`，规则正文与元数据分开比较，`rules_changed` 只由正文决定。
+   任一页面读取或校验失败时，执行器删除本次临时文件和事务标记，原有 reference 不变，并报告失败原因。
+3. **审阅来源变化。** 来源页面的版本无法与本地 `source_version` 核对一致时，执行器以 `sources_changed` 停止：只刷新元数据不能声称规则已更新。先对照本次输出的在线全文审阅，修订规则正文草稿，再用 `--body-draft <snapshot>=<path>` 提供完整 reference 草稿重新 plan；草稿中未受影响的段落由执行器原样保留，元数据和来源清单仍由执行器生成。
+4. **确认。** 核对本次计划中的页面版本与审阅草稿依据的版本一致。若来源再次变化，先运行 `abort`，重审后重新 plan。展示差异和来源，按共享协议用 `action_id` 调用 `confirm_gate`。只有 `approved` 才进入下一步。取消、拒绝、工具缺失或失败时停止；若还未替换文件，运行 `abort` 清理事务。
+5. **apply。** 运行 `scripts/refresh.py apply --action-id <编号>`。执行器在事务锁内重新计算现场哈希，门禁校验通过后才逐个以同目录 rename 原子替换 reference，每个替换前后都重新读取校验。两个 reference 都替换并复核成功后才删除事务标记；清理失败时如实报告“刷新已写入但事务清理未完成”。任一步失败保留事务标记，按异常恢复一节处理，不得静默接受半更新状态。
+6. **报告。** 列出三个页面的来源版本和更新时间，以及两个快照各自的 `checked_at`、`checked_by`、正文差异和草稿使用情况。正文无差异时说明这次更新的是核对元数据。
 
 ## 异常恢复
 
-- 页面读取、校验、差异确认或写入失败：原有快照不变；能安全清理时删除本次临时文件和标记。
-- `ask_user_question` 不在可用工具列表中，或返回 `no_ui`/`no_custom_ui`/`session_load_failed`/`stale_module_cache`：确认闸门无法展示给用户，停止并报告本 skill 需要交互式宿主；删除本次临时文件和事务标记，原有快照保持不变。不得改用自然语言确认，不得把这种情况记作用户取消或拒绝。
-- 进程中断导致 `.refresh.pending` 保留：业务 skill 不会因此停止。标记中记录了每个目标替换前的 SHA-256，与当前文件逐一比对即可判定哪些文件已被替换。两个 reference 都在 git 管理下：用 `git diff` 查看半更新状态，需要回滚已替换文件时用 `git checkout -- <reference>`。恢复（回滚或重跑完成另一半替换）是明确的人工维护动作，业务 skill 不参与；处置完成后删除标记和残留临时文件，再重新调用本 skill，不得在未检查标记前直接重跑。
+- 页面读取、校验、候选写入或动作登记失败：原有快照不变；执行器删除本次临时文件和事务标记。
+- 确认门禁不可用、报错或未放行：停止并报告，不改用自然语言确认，也不把工具错误记作用户拒绝；用户拒绝时运行 `abort` 清理事务。
+- `confirm_gate` 不在可用工具列表中：确认无法展示给用户。停止并报告本 skill 需要带确认门禁的宿主，原有 reference 保持不变。
+- 进程中断导致 `.refresh.pending` 残留：先运行 `status` 子命令。标记记录了每个目标替换前和候选的 SHA-256，与当前文件逐一比对即可判定哪些已被替换。两个 reference 都在 git 管理下：用 `git diff` 查看半更新状态，需要回滚已替换文件时用 `git checkout -- <reference>`。恢复（回滚或补完另一半替换）是明确的人工维护动作，业务 skill 不参与；处置完成后删除标记和残留临时文件，再重新调用本 skill，不得在未检查标记前直接重跑。`abort` 只在现场哈希证明两个 reference 都未被替换时才清理事务；已发生替换时它拒绝清理并指向本节。
 - 刷新失败但旧快照存在：业务 skill 继续按原样读取本地快照，不校验版本或是否过期，也不要求用户接受旧快照。快照缺失或不可读时，业务 skill 无法应用规则。
 
 本 skill 不执行 `git add`、`git commit`、`git push` 或 Redmine issue 更新。在线 Wiki 是刷新时的来源，本地快照是两个业务 skill 执行时的唯一规则来源。

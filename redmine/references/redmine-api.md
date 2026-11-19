@@ -1,21 +1,9 @@
 ---
 name: redmine
-description: 当用户查询或者修改redmine任务时
+description: Redmine REST API 详细参考：各资源端点、参数、分页与示例，配合 redmine/SKILL.md 使用。
 ---
 
-# Redmine 工具技能
-
-## 技能描述
-通过Redmine REST API访问和操作Redmine问题跟踪系统，支持完整的CRUD操作（创建、读取、更新、删除）。
-
-## 使用场景
-- 查看问题详情、问题列表
-- 创建、更新、删除问题
-- 查看项目列表、项目详情
-- 查看用户信息
-- 添加/移除问题观察者
-- 上传附件
-- 按要求分析整理数据
+# Redmine API 参考
 
 ## 配置信息
 
@@ -26,10 +14,10 @@ https://git.nationalchip.com/redmine
 见本技能目录下的 `SECRET.md`
 
 ### 认证方式
-三种认证方式任选其一：
-1. HTTP Header: `X-Redmine-API-Key: {API_KEY}` （推荐）
-2. URL参数: `?key={API_KEY}`
-3. HTTP Basic Auth: 用户名为API Key，密码随机
+认证只用 HTTP 请求头：`X-Redmine-API-Key: {API_KEY}`。
+不要使用 URL 查询参数（`?key=`）或 HTTP Basic Auth：查询参数会把 key 留在 URL 里（日志、shell 历史、Referer 都可能带出去）。
+
+常用查询与结论回写已封装为 `scripts/redmine.py`（凭据处理、分页与审计要求见 SKILL.md）；本文件是端点形状的详细参考。
 
 ---
 

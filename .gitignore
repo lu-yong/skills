@@ -1,2 +1,12 @@
 # Local credentials
 redmine/SECRET.md
+
+# Python bytecode
+__pycache__/
+
+# Refresh transaction runtime artifacts (see refresh-bu1-sdk-rules/SKILL.md)
+refresh-bu1-sdk-rules/.refresh.pending
+refresh-bu1-sdk-rules/.refresh.pending.lock
+refresh-bu1-sdk-rules/.refresh.pending.*.tmp
+commit-gerrit/references/bu1-sdk-gerrit-rules.md.tmp-*
+update-issue-conclusion/references/bu1-sdk-conclusion-rules.md.tmp-*

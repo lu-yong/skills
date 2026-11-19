@@ -1,66 +1,52 @@
 # Skills 仓库
 
-> 读者基线：组内同事，日常使用某种编码 Agent（pi、Codex、OpenCode、Claude Code、Cursor 等），不了解这个仓库里的任何约定。
+这是面向团队的 Agent 技能集合。每项技能的入口为目录中的 `SKILL.md`，说明适用场景、步骤和完成条件。通用技能可在不同项目复用，公司流程技能使用 Nationalchip 的 Gerrit、Redmine 和 BU1-SDK 规则。
 
-这是我日常积累的一套 Agent 技能（skill）集合：每个目录是一个技能，入口都是该目录下的 `SKILL.md`，用自然语言描述"什么时候用、怎么做"。其中一部分绑定了我们公司的基础设施（Nationalchip 的 Gerrit / Redmine），另一部分是通用的工程方法类技能，拿到任何项目都能用。
+## 在你的 Agent 中使用
 
-## 拿到仓库后第一件事：让你的 Agent 读一遍并适配
+保留仓库目录结构，让宿主发现需要的技能。可以把技能目录链接到宿主的技能目录，或在宿主配置中指向仓库。要适配到 pi、Codex、Claude Code 或 OpenCode，可先让 Agent 检查技能发现方式、命令依赖和本地凭据。标有 `disable-model-invocation: true` 的技能按宿主支持的方式手动调用。
 
-**不要直接复制进你的 skill 目录就开用。** 组内各人用的 Agent 工具不同，这些技能是在我的环境下写和调试的——我主要用 pi，有时用 Codex 和 Claude Code，偶尔用 OpenCode，技能格式沿用 Claude Code 的 `SKILL.md` 约定；日常开发在公司的 Ubuntu 环境，也有部分在我个人的 macOS 上。你的工具和系统组合大概率跟我不同，里面存在三类需要适配的东西：
+Gerrit 和 Redmine 的 CLI 使用 Python 3，Gerrit 还需要 curl。运行 `python3 gerrit/scripts/gerrit.py instances` 查看实例，用 `python3 redmine/scripts/redmine.py --help` 查看 Redmine 子命令。查询实例、认证方式、TLS 回退和评审推送主机由同一份 [Gerrit 实例表](gerrit/instances.json) 管理。仅登记为推送目标的主机需要显式指定查询实例。认证配置见 [Gerrit](gerrit/SKILL.md) 和 [Redmine](redmine/SKILL.md)。
 
-1. **技能加载机制不同。** 这些技能用的是 Claude Code 式的 `SKILL.md` frontmatter（如 `disable-model-invocation: true` 表示只能手动 `/技能名` 触发）；pi / Codex / OpenCode 等工具的技能发现方式和字段支持各不一样，可能需要改放置目录或在 AGENTS.md 里挂路由（仓库里的 `install-openspec-superpowers-bridge` 就是干这个的一个例子）。
-2. **环境绑定的内容。** `commit-gerrit`、`gerrit`、`redmine`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 依赖公司 Gerrit / Redmine 的地址和你个人的认证凭据；个别技能里可能残留我机器上的绝对路径，macOS 与 Ubuntu 的命令差异（如 `sed`、`open` 等）也要留意。另外，`commit-gerrit`、`update-issue-conclusion`、`refresh-bu1-sdk-rules` 是门禁技能：所有确认闸门都要求宿主提供 `ask_user_question` 结构化提问工具（我的 pi 环境通过扩展提供），宿主没有这个工具时技能会直接停下报告，不会降级成自然语言确认；`grilling` 这类对话技能则降级为 markdown 提问（判定标准见 `docs/adr/0001-gate-skills-never-degrade.md`）。
+提交和推送、结论回写与规则刷新都由业务脚本校验用户确认。pi 用户可按 [确认门禁接入说明](confirm-gate/README.md) 加载扩展，了解结构化选择和写入授权的分工，以及 `bash` 拦截与本地凭据的执行范围。
 
-所以推荐的做法是，把仓库丢给你自己的 Agent，说一句类似：
+## 技能目录
 
-> 读一遍这个 skills 仓库里每个目录的 SKILL.md，告诉我哪些技能在你（当前 Agent 工具）里能直接用、哪些需要改加载方式、哪些引用了我环境里没有的地址/凭据/路径，然后帮我适配到我的环境。
+### 公司开发流程
 
-## 里面有什么
+- 按本地规则和指定范围生成提交，确认后推送 Gerrit 评审。[commit-gerrit](commit-gerrit/SKILL.md)
+- 核对 Redmine issue、本地提交与 Gerrit 变更，确认后写回中文结论并复查。[update-issue-conclusion](update-issue-conclusion/SKILL.md)
+- 从 Redmine Wiki 刷新 BU1-SDK 的两份本地规则快照。[refresh-bu1-sdk-rules](refresh-bu1-sdk-rules/SKILL.md)
+- 只读查询 Gerrit 变更、patchset、文件、项目和账号，或定位本地提交对应的评审。[gerrit](gerrit/SKILL.md)
+- 查询和管理 Redmine issue、项目、附件和工时等数据。[redmine](redmine/SKILL.md)
 
-按你想做的事找：
+### 设计、评审和测试
 
-**想把代码提交到公司流程里**
+- 用共用术语讨论模块接口、职责与可测试性。[codebase-design](codebase-design/SKILL.md)
+- 找出阻碍演进的模块接口，比较可深化的重构机会。[improve-codebase-architecture](improve-codebase-architecture/SKILL.md)
+- 逐轮追问设计决策并给出推荐答案，需要记录术语和 ADR 时用文档版。[grilling](grilling/SKILL.md)、[grill-with-docs](grill-with-docs/SKILL.md)
+- 从规格、规范与设计、安全与可靠性三条独立路径审查改动。[code-review](code-review/SKILL.md)
+- 用 red → green → refactor 实现并验证每个可观察行为。[tdd](tdd/SKILL.md)
+- 搭一次性原型验证状态模型、逻辑或界面方向。[prototype](prototype/SKILL.md)
 
-- `commit-gerrit` — 按本地规则快照提交 Gerrit 评审（要求 issue 号、确认提交草稿、确认目标分支）。
-- `update-issue-conclusion` — 完成 Redmine issue 的中文结论：核对 issue、本地提交和 Gerrit change 后草拟，确认后写回。
-- `refresh-bu1-sdk-rules` — 从 Redmine Wiki 刷新本地的 BU1-SDK Gerrit/Redmine 规则快照。
+### 文档和跨会话协作
 
-**想查公司系统**
+- 写出让首次接触项目的读者能用的技术文档。[humanize-tech-docs](humanize-tech-docs/SKILL.md)
+- 维护领域模型、术语表和 ADR。[domain-modeling](domain-modeling/SKILL.md)
+- 把跨会话工作整理成可逐项解决的决策工单。[wayfinder](wayfinder/SKILL.md)
+- 把计划或对话拆成带依赖关系的工单。[to-tickets](to-tickets/SKILL.md)
+- 把当前工作压缩成交接文档。[handoff](handoff/SKILL.md)
+- 查阅技能编写和维护原则。[writing-great-skills](writing-great-skills/SKILL.md)
 
-- `gerrit` — 只读查询 Gerrit：change 详情、patch、改动文件等。
-- `redmine` — 查询和操作 Redmine 的 issue、项目、工时等。
+### OpenSpec
 
-**想做设计、评审、写代码**
+- 安装、升级并验证适用于 AOSP Repo 项目的 `aosp-repo` schema。[install-openspec-aosp-repo](install-openspec-aosp-repo/SKILL.md)
+- 安装、升级并验证 `tdd-spec` schema，让 OpenSpec apply 按可观察行为落实 TDD。[install-openspec-tdd](install-openspec-tdd/SKILL.md)
+- 配置 OpenSpec 产出文档时使用的自然语言。[openspec-language-config](openspec-language-config/SKILL.md)
 
-- `codebase-design` — 深模块设计的共享词汇；其他设计类技能的基础。
-- `grilling` / `grill-with-docs` — 把你的方案拆成决策树，按轮次穷追猛打地提问：每轮至多四题、优先问解锁最多的，宿主有 `ask_user_question` 时走结构化问卷、没有则降级为 markdown，每题附推荐答案，能自己查的事实不问你；后者边问边沉淀 ADR 和术语表。
-- `code-review` — 从规格、设计规范、安全可靠性三条独立轴评审改动。
-- `tdd` — 测试驱动开发流程。
-- `prototype` — 快速搭一次性原型验证状态模型或 UI 方向。
+## 本地检查
 
-**想写文档、建领域模型**
-
-- `humanize-tech-docs` — 把技术文档写成/修成零上下文新读者能用的样子。
-- `domain-modeling` — 维护项目领域模型、术语表和 ADR。
-
-**想管理大块工作、跨会话协作**
-
-- `wayfinder` — 把超出单次会话容量的大工程规划成 tracker 上的决策工单。
-- `to-tickets` — 把计划或当前对话拆成带阻塞关系的 tracer-bullet 工单。
-- `handoff` — 把当前对话压缩成交接文档给下一个会话。
-
-**Android 相关**
-
-- `adb` — adb 的设备诊断、日志收集、HAL/服务调试等工作流。
-
-
-**维护技能本身 / 跨工具桥接**
-
-- `writing-great-skills` — 写技能的参考规范；改这个仓库里的技能前先看它。
-- `install-openspec-aosp-repo` — 往当前仓库安装/升级 OpenSpec 的 `aosp-repo` schema（来自 `lu-yong/openspec-schemas`），并把 `openspec/config.yaml` 的 `schema:` 指向它；升级前先展示 diff。
-- `install-openspec-superpowers-bridge` — 在 Codex/OpenCode 里桥接 OpenSpec 与 Superpowers。
-- `openspec-language-config` — 配置 OpenSpec 用指定自然语言产出文档。
-
-## 反馈
-
-用出问题（尤其是在非 Claude Code 的工具里跑不起来），或者适配出了更通用的写法，直接找我，或改完发我合回来——这个仓库的价值在于大家的适配经验能沉淀回来。
+```bash
+python3 -m unittest discover -s tests
+node --test confirm-gate/pi-extension/
+```
