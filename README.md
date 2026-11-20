@@ -1,24 +1,12 @@
 # Skills 仓库
 
-这是面向团队的 Agent 技能集合。每项技能的入口为目录中的 `SKILL.md`，说明适用场景、步骤和完成条件。通用技能可在不同项目复用，公司流程技能使用 Nationalchip 的 Gerrit、Redmine 和 BU1-SDK 规则。
+这是 Agent 技能集合。每项技能的入口为目录中的 `SKILL.md`，说明适用场景、步骤和完成条件，可在不同项目复用。Nationalchip 的 Gerrit、Redmine 和 BU1-SDK 流程技能（`gerrit`、`redmine`、`commit-gerrit`、`update-issue-conclusion`、`refresh-bu1-sdk-rules`）以及它们用的确认门禁已迁到团队仓库 `ai_home`，在那里安装和维护。
 
 ## 在你的 Agent 中使用
 
 保留仓库目录结构，让宿主发现需要的技能。可以把技能目录链接到宿主的技能目录，或在宿主配置中指向仓库。要适配到 pi、Codex、Claude Code 或 OpenCode，可先让 Agent 检查技能发现方式、命令依赖和本地凭据。标有 `disable-model-invocation: true` 的技能按宿主支持的方式手动调用。
 
-Gerrit 和 Redmine 的 CLI 使用 Python 3，Gerrit 还需要 curl。运行 `python3 gerrit/scripts/gerrit.py instances` 查看实例，用 `python3 redmine/scripts/redmine.py --help` 查看 Redmine 子命令。查询实例、认证方式、TLS 回退和评审推送主机由同一份 [Gerrit 实例表](gerrit/instances.json) 管理。仅登记为推送目标的主机需要显式指定查询实例。认证配置见 [Gerrit](gerrit/SKILL.md) 和 [Redmine](redmine/SKILL.md)。
-
-提交和推送、结论回写与规则刷新都由业务脚本校验用户确认。pi 用户可按 [确认门禁接入说明](confirm-gate/README.md) 加载扩展，了解结构化选择和写入授权的分工，以及 `bash` 拦截与本地凭据的执行范围。
-
 ## 技能目录
-
-### 公司开发流程
-
-- 按本地规则和指定范围生成提交，确认后推送 Gerrit 评审。[commit-gerrit](commit-gerrit/SKILL.md)
-- 核对 Redmine issue、本地提交与 Gerrit 变更，确认后写回中文结论并复查。[update-issue-conclusion](update-issue-conclusion/SKILL.md)
-- 从 Redmine Wiki 刷新 BU1-SDK 的两份本地规则快照。[refresh-bu1-sdk-rules](refresh-bu1-sdk-rules/SKILL.md)
-- 只读查询 Gerrit 变更、patchset、文件、项目和账号，或定位本地提交对应的评审。[gerrit](gerrit/SKILL.md)
-- 查询和管理 Redmine issue、项目、附件和工时等数据。[redmine](redmine/SKILL.md)
 
 ### 设计、评审和测试
 
@@ -48,5 +36,4 @@ Gerrit 和 Redmine 的 CLI 使用 Python 3，Gerrit 还需要 curl。运行 `pyt
 
 ```bash
 python3 -m unittest discover -s tests
-node --test confirm-gate/pi-extension/
 ```
